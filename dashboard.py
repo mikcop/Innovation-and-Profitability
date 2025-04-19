@@ -100,7 +100,28 @@ st.markdown("""#### ✅ Assumption: R&D intensity differs strongly across indust
 st.subheader("🏭 Top Avg R&D Intensity by Sector")
 sector_group = df[df['year'] == selected_year].groupby('isic4')['rd_intensity'].mean().reset_index()
 sector_group = sector_group.sort_values(by='rd_intensity', ascending=False).head(20)
-fig_sector = px.bar(sector_group, x='isic4', y='rd_intensity', labels={'rd_intensity': 'R&D Intensity'})
+fig_sector = px.bar(
+    sector_group,
+    y='isic4',
+    x='rd_intensity',
+    orientation='h',
+    labels={'rd_intensity': 'R&D Intensity'},
+    title='Top 20 Avg R&D Intensity by Sector',
+    text_auto='.2f',
+    color='rd_intensity',
+    color_continuous_scale='Blues')
+fig_sector.update_layout(
+    yaxis_title='ISIC Sector Code',
+    xaxis_title='R&D Intensity (%)',
+    plot_bgcolor='rgba(0,0,0,0)',
+    xaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
+    title_font_size=18
+)',
+    xaxis_tickangle=-45,
+    plot_bgcolor='rgba(0,0,0,0)',
+    yaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
+    title_font_size=18
+)
 st.plotly_chart(fig_sector)
 
 with st.expander("🏷️ Sector Legend (ISIC4 to Description)"):
