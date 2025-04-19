@@ -125,16 +125,20 @@ efficient = highlight_df.sort_values(by='patents_per_rd', ascending=False).head(
 st.dataframe(efficient[['company_name', 'ctry_code', 'rd', 'patEP', 'patents_per_rd', 'revenue_per_employee']])
 
 # Performance Outlier Filter
-st.sidebar.subheader("Outlier Display Options")
-view_mode = st.sidebar.radio("Select outlier type to display:", ["Underperformers", "Outperformers", "Both"])
+st.sidebar.subheader("Underperformer Display Option")
+show_underperformers = st.sidebar.checkbox("Show High R&D, Low Profit Firms", value=True)
 
-# Calculate underperformers and outperformers
+# Calculate underperformers only
 underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(0.75)) &
+                               (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))]
+underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(0.75)) &
+                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))] > highlight_df['rd_intensity'].quantile(0.75)) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))] > highlight_df['rd_intensity'].quantile(0.75)) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))] > highlight_df['rd_intensity'].quantile(rd_q)) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))]
 
-outperformers = highlight_df[(highlight_df['rd_intensity'] < highlight_df['rd_intensity'].quantile(0.25)) &
+ < highlight_df['rd_intensity'].quantile(0.25)) &
+                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(0.75))] < highlight_df['rd_intensity'].quantile(0.25)) &
                               (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(0.75))] < highlight_df['rd_intensity'].quantile(0.25)) &
                               (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(0.75))] < highlight_df['rd_intensity'].quantile(1 - rd_q)) &
                               (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(1 - profit_q))] < highlight_df['rd_intensity'].quantile(1 - rd_q)) &
@@ -149,20 +153,12 @@ if not underperformers.empty:
 else:
     st.info("No significant underperformers found with current filters.")
 
-# Show selected outliers
-if view_mode in ["Underperformers", "Both"]:
+if show_underperformers:
     st.subheader("⚠️ Underperformers: High R&D, Low Profit")
     if not underperformers.empty:
         st.dataframe(underperformers[['company_name', 'ctry_code', 'rd', 'rd_intensity', 'profit_margin']])
     else:
         st.info("No significant underperformers found with current filters.")
-
-if view_mode in ["Outperformers", "Both"]:
-    st.subheader("🏆 Outperformers: Low R&D, High Profit")
-    if not outperformers.empty:
-        st.dataframe(outperformers[['company_name', 'ctry_code', 'rd', 'rd_intensity', 'profit_margin']])
-    else:
-        st.info("No significant outperformers found with current filters.")
 
 # Strategic Insights
 st.subheader("🧠 Strategic Key Insights")
