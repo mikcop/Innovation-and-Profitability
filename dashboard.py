@@ -62,8 +62,7 @@ fig_line = px.line(time_series, x='year', y=['rd', 'ns', 'capex', 'op'], markers
 st.plotly_chart(fig_line)
 
 # Scatter: R&D Intensity vs Profit Margin (with Polynomial Fit)
-# Show outliers on this chart
-st.subheader("📌 R&D Intensity vs Profit Margin (Inverted-U Trend with Outliers)")
+st.subheader("📌 R&D Intensity vs Profit Margin (Inverted-U Trend)")
 
 fig_scatter = px.scatter(filtered_df, x='rd_intensity', y='profit_margin',
                          hover_data=['company_name'], color='ctry_code',
@@ -77,16 +76,6 @@ rd_range_vals = np.linspace(filtered_df['rd_intensity'].min(), filtered_df['rd_i
 profit_pred = fit_fn(rd_range_vals)
 fig_scatter.add_scatter(x=rd_range_vals, y=profit_pred, mode='lines', name='Quadratic Fit')
 
-# Highlight underperformers
-if not underperformers.empty:
-    fig_scatter.add_scatter(
-        x=underperformers['rd_intensity'],
-        y=underperformers['profit_margin'],
-        mode='markers',
-        name='Underperformers',
-        marker=dict(size=10, color='red', symbol='x'),
-        text=underperformers['company_name']
-    )
 st.plotly_chart(fig_scatter)
 
 
@@ -124,43 +113,7 @@ st.markdown("### 🧪 Top Efficient Innovators")
 efficient = highlight_df.sort_values(by='patents_per_rd', ascending=False).head(10)
 st.dataframe(efficient[['company_name', 'ctry_code', 'rd', 'patEP', 'patents_per_rd', 'revenue_per_employee']])
 
-# Performance Outlier Filter
-st.sidebar.subheader("Underperformer Display Option")
-show_underperformers = st.sidebar.checkbox("Show High R&D, Low Profit Firms", value=True)
 
-# Calculate underperformers only
-underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(0.75)) &
-                               (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))]
-underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(0.75)) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))] > highlight_df['rd_intensity'].quantile(0.75)) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))] > highlight_df['rd_intensity'].quantile(0.75)) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))] > highlight_df['rd_intensity'].quantile(rd_q)) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))]
-
- < highlight_df['rd_intensity'].quantile(0.25)) &
-                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(0.75))] < highlight_df['rd_intensity'].quantile(0.25)) &
-                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(0.75))] < highlight_df['rd_intensity'].quantile(0.25)) &
-                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(0.75))] < highlight_df['rd_intensity'].quantile(1 - rd_q)) &
-                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(1 - profit_q))] < highlight_df['rd_intensity'].quantile(1 - rd_q)) &
-                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(1 - profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))]) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))]
-if not underperformers.empty:
-    st.markdown("### 🚨 High R&D Spend, Low Profit Margin")
-    st.dataframe(underperformers[['company_name', 'ctry_code', 'rd', 'rd_intensity', 'profit_margin']])
-else:
-    st.info("No significant underperformers found with current filters.")
-
-if show_underperformers:
-    st.subheader("⚠️ Underperformers: High R&D, Low Profit")
-    if not underperformers.empty:
-        st.dataframe(underperformers[['company_name', 'ctry_code', 'rd', 'rd_intensity', 'profit_margin']])
-    else:
-        st.info("No significant underperformers found with current filters.")
-
-# Strategic Insights
 st.subheader("🧠 Strategic Key Insights")
 st.markdown("""
 - **R&D Leaders**: Alphabet, Samsung, Microsoft link high R&D with strong profit margins.
