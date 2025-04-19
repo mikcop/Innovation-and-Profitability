@@ -81,10 +81,25 @@ st.plotly_chart(fig_scatter)
 
 
 # Bar: Sector-level R&D Intensity
-st.subheader("🏭 Avg R&D Intensity by Sector")
+st.subheader("🏭 Top Avg R&D Intensity by Sector")
 sector_group = df[df['year'] == selected_year].groupby('isic4')['rd_intensity'].mean().reset_index()
+sector_group = sector_group.sort_values(by='rd_intensity', ascending=False).head(10)
 fig_sector = px.bar(sector_group, x='isic4', y='rd_intensity', labels={'rd_intensity': 'R&D Intensity'})
 st.plotly_chart(fig_sector)
+
+with st.expander("🏷️ Sector Legend (ISIC4 to Description)"):
+    st.markdown("""
+    - **21**: Pharmaceuticals
+    - **26**: Electronics & Optical
+    - **29-30**: Automotive & Transport
+    - **62-63**: IT & Software
+    - **10-12**: Food, Beverages, Tobacco
+    - **20**: Chemicals
+    - **27**: Electrical Equipment
+    - **58-60**: Publishing & Broadcasting
+    - **28**: Machinery & Equipment
+    - **61**: Telecommunications
+    """)
 
 # Country Comparison
 st.subheader("🌍 R&D Investment by Country")
