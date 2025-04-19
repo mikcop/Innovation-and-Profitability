@@ -1,211 +1,213 @@
+"""
+Corporate R&D Innovation Dashboard · rev 2025‑04
+------------------------------------------------
+Improvements
+• one‑time cached load & tidy (incl. NaN→0 for IP counts)
+• derived ratios pre‑computed once
+• “Reset filters” button
+• polynomial fit wrapped in a guard
+• consistent Plotly template + rotated labels
+• helper dictionaries for ISIC / country codes
+"""
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import seaborn as sns
-import matplotlib.pyplot as plt
 import numpy as np
 
-# Load data
-df = pd.read_csv("panel_2015_2018.csv")
+# ----------------------------------------------------------------------
+# 1 · DATA LOAD & PRE‑PROCESS
+# ----------------------------------------------------------------------
+@st.cache_data(show_spinner=False)
+def load_data(path: str) -> pd.DataFrame:
+    df = pd.read_csv(path)
 
-# Data preprocessing
-df['rd_intensity'] = df['rd'] / df['ns']
-df['profit_margin'] = df['op'] / df['ns']
+    # tidy types
+    num_cols = ["rd", "ns", "capex", "op", "emp",
+                "patCN", "patEP", "patJP", "patKR", "patUS", "TMnEU", "TMnUS"]
+    df[num_cols] = df[num_cols].fillna(0)
 
-# Sidebar filters
+    # core ratios
+    df["rd_intensity"]   = df["rd"].div(df["ns"].replace({0: np.nan}))
+    df["profit_margin"]  = df["op"].div(df["ns"].replace({0: np.nan}))
+    df["patents_per_rd"] = df["patEP"].div(df["rd"].replace({0: np.nan}))
+    df["revenue_per_employee"] = df["ns"].div(df["emp"].replace({0: np.nan}))
+
+    # short ISIC legend (customise as needed)
+    isic_map = {
+        "21": "Pharma", "26": "Electronics & Optical", "29-30": "Auto & Transport",
+        "62-63": "IT & Software", "10-12": "Food/Beverage/Tobacco", "20": "Chemicals",
+        "27": "Electrical Equip.", "58-60": "Publishing/Broadcast", "28": "Machinery",
+        "61": "Telecom"
+    }
+    df["isic4_desc"] = df["isic4"].astype(str).map(isic_map).fillna(df["isic4"].astype(str))
+    return df
+
+df = load_data("panel_2015_2018.csv")
+
+# ----------------------------------------------------------------------
+# 2 · SIDEBAR FILTERS
+# ----------------------------------------------------------------------
 st.sidebar.title("🔍 Filter Data")
-selected_year = st.sidebar.selectbox("Select Year", sorted(df['year'].unique()))
-selected_country = st.sidebar.multiselect("Select Country", df['ctry_code'].unique(), default=df['ctry_code'].unique())
-selected_sector = st.sidebar.multiselect("Select Sector (ISIC4)", df['isic4'].unique(), default=df['isic4'].unique())
-rd_range = st.sidebar.slider("R&D Intensity Range", 0.0, 10.0, (0.0, 2.0))
-profit_range = st.sidebar.slider("Profit Margin Range", -2.0, 2.0, (-1.0, 1.0))
 
-# Filter data
-filtered_df = df[(df['year'] == selected_year) &
-                 (df['ctry_code'].isin(selected_country)) &
-                 (df['isic4'].isin(selected_sector)) &
-                 (df['rd_intensity'].between(*rd_range)) &
-                 (df['profit_margin'].between(*profit_range))]
+if st.sidebar.button("Reset filters"):
+    st.experimental_rerun()
 
-st.title("🚀 Corporate R&D Innovation Dashboard")
+year       = st.sidebar.selectbox("Select Year", sorted(df["year"].unique()), index=3)
+countries  = st.sidebar.multiselect("Select Country", df["ctry_code"].unique(),
+                                    default=list(df["ctry_code"].unique()))
+sectors    = st.sidebar.multiselect("Select Sector (ISIC4)", df["isic4"].unique(),
+                                    default=list(df["isic4"].unique()))
+rd_range   = st.sidebar.slider("R&D Intensity Range", 0.0, 10.0, (0.0, 2.0))
+prof_range = st.sidebar.slider("Profit Margin Range", -2.0, 2.0, (-1.0, 1.0))
 
-# Derived innovation efficiency metrics
-df['patents_per_rd'] = df['patEP'] / df['rd']
-df['revenue_per_employee'] = df['ns'] / df['emp']
-
-# Quick Metrics
-st.subheader("📊 Key Performance Indicators")
-col1, col2, col3 = st.columns(3)
-col1.metric("Avg R&D Intensity", f"{filtered_df['rd_intensity'].mean():.2%}")
-col2.metric("Avg Profit Margin", f"{filtered_df['profit_margin'].mean():.2%}")
-col3.metric("Top R&D Firm", filtered_df.loc[filtered_df['rd'].idxmax(), 'company_name'])
-
-with st.expander("📘 Variable Legend (Legenda Variabili)"):
-    st.markdown("""
-    - **rd**: R&D investment (in million €) / Investimenti in R&S
-    - **ns**: Net sales / Fatturato netto
-    - **capex**: Capital expenditures / Spese in conto capitale
-    - **op**: Operating profits / Profitti operativi
-    - **emp**: Number of employees / Dipendenti
-    - **rd_intensity**: R&D as % of sales / Intensità R&S
-    - **profit_margin**: Operating profit % / Margine operativo
-    - **ctry_code**: Country (ISO) / Codice paese
-    - **isic4**: Sector classification / Settore ISIC
-    - **patEP**: European patents / Brevetti EPO
-    """)
-
-# Time-Series Chart
-st.markdown("""#### ✅ Assumption: Firms that invest in R&D consistently grow in scale
-**Test:** Examine time-series of R&D, sales, CAPEX, and profit.
-**Visual:** Line chart + growth rate table shows trends from 2015 to 2018.""")
-st.subheader("📈 R&D and Financial Metrics Over Time")
-time_series = df.groupby('year')[['rd', 'ns', 'capex', 'op']].sum().reset_index()
-time_series['rd_growth'] = time_series['rd'].pct_change() * 100
-time_series['sales_growth'] = time_series['ns'].pct_change() * 100
-time_series['capex_growth'] = time_series['capex'].pct_change() * 100
-time_series['profit_growth'] = time_series['op'].pct_change() * 100
-
-fig_line = px.line(time_series, x='year', y=['rd', 'ns', 'capex', 'op'], markers=True,
-                   labels={'value': '€M', 'variable': 'Metric'})
-st.plotly_chart(fig_line)
-
-st.markdown("### 📊 Year-on-Year Growth Rates")
-st.dataframe(time_series[['year', 'rd_growth', 'sales_growth', 'capex_growth', 'profit_growth']])
-
-# Scatter: R&D Intensity vs Profit Margin (with Polynomial Fit)
-st.markdown("""#### ✅ Assumption: R&D intensity improves profit, but only to a point
-**Test:** Quadratic regression tests for inverted-U between R&D intensity and profit margin.
-**Visual:** Scatterplot with fitted curve.""")
-
-fig_scatter = px.scatter(filtered_df, x='rd_intensity', y='profit_margin',
-                         hover_data=['company_name'], color='ctry_code',
-                         title="All Companies")
-
-# Polynomial fit
-fit = np.polyfit(filtered_df['rd_intensity'], filtered_df['profit_margin'], 2)
-fit_fn = np.poly1d(fit)
-
-rd_range_vals = np.linspace(filtered_df['rd_intensity'].min(), filtered_df['rd_intensity'].max(), 200)
-profit_pred = fit_fn(rd_range_vals)
-fig_scatter.add_scatter(x=rd_range_vals, y=profit_pred, mode='lines', name='Quadratic Fit')
-
-st.plotly_chart(fig_scatter)
-
-
-
-# Bar: Sector-level R&D Intensity
-st.markdown("""#### ✅ Assumption: R&D intensity differs strongly across industries
-**Test:** Compare mean R&D intensity across ISIC sectors.
-**Visual:** Top 10 bar chart with ISIC legend.""")
-st.subheader("🏭 Top Avg R&D Intensity by Sector")
-sector_group = df[df['year'] == selected_year].groupby('isic4')['rd_intensity'].mean().reset_index()
-sector_group = sector_group.sort_values(by='rd_intensity', ascending=False).head(20)
-fig_sector = px.bar(
-    sector_group,
-    y='isic4',
-    x='rd_intensity',
-    orientation='h',
-    labels={'rd_intensity': 'R&D Intensity'},
-    title='Top 20 Avg R&D Intensity by Sector',
-    text_auto='.2f',
-    color='rd_intensity',
-    color_continuous_scale='Blues')
-fig_sector.update_layout(
-    yaxis_title='ISIC Sector Code',
-    xaxis_title='R&D Intensity (%)',
-    plot_bgcolor='rgba(0,0,0,0)',
-    xaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
-    title_font_size=18
-)',
-    xaxis_tickangle=-45,
-    plot_bgcolor='rgba(0,0,0,0)',
-    yaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
-    title_font_size=18
+mask = (
+    (df["year"] == year) &
+    (df["ctry_code"].isin(countries)) &
+    (df["isic4"].isin(sectors)) &
+    (df["rd_intensity"].between(*rd_range)) &
+    (df["profit_margin"].between(*prof_range))
 )
-st.plotly_chart(fig_sector)
+filtered = df.loc[mask]
 
-with st.expander("🏷️ Sector Legend (ISIC4 to Description)"):
-    st.markdown("""
-    - **21**: Pharmaceuticals
-    - **26**: Electronics & Optical
-    - **29-30**: Automotive & Transport
-    - **62-63**: IT & Software
-    - **10-12**: Food, Beverages, Tobacco
-    - **20**: Chemicals
-    - **27**: Electrical Equipment
-    - **58-60**: Publishing & Broadcasting
-    - **28**: Machinery & Equipment
-    - **61**: Telecommunications
-    """)
+# ----------------------------------------------------------------------
+# 3 · KPI CARDS
+# ----------------------------------------------------------------------
+st.title("🚀 Corporate R&D Innovation Dashboard")
 
-# Country Comparison
-st.markdown("""#### ✅ Assumption: High R&D by country aligns with innovation leadership
-**Test:** Compare country R&D totals
-**Visual:** Bar chart by country for selected year.""")
-st.subheader("🌍 R&D Investment by Country")
-country_rd = filtered_df.groupby('ctry_code')['rd'].sum().reset_index()
-country_rd = country_rd.sort_values(by='rd', ascending=False).head(20)
-fig_country = px.bar(country_rd, x='ctry_code', y='rd', color='rd', labels={'rd': 'R&D (€M)'})
-st.plotly_chart(fig_country)
+col1, col2, col3 = st.columns(3)
+col1.metric("Avg R&D Intensity",  f"{filtered['rd_intensity'].mean():.2%}")
+col2.metric("Avg Profit Margin",  f"{filtered['profit_margin'].mean():.2%}")
+top_firm = filtered.loc[filtered["rd"].idxmax(), "company_name"] if not filtered.empty else "—"
+col3.metric("Top R&D Firm", top_firm)
 
-# Company R&D Rank Shifts
-st.markdown("""#### ✅ Assumption: Global R&D leaders shift slowly, but top movers exist
-**Test:** Rank changes from 2015 to 2018
-**Visual:** Tables of biggest climbers and decliners.""")
-st.subheader("📉 Top Movers in R&D Ranking (2015–2018)")
-rank_2015 = df[df['year'] == 2015][['company_id', 'company_name', 'rd']].copy()
-rank_2015['rank_2015'] = rank_2015['rd'].rank(ascending=False)
+# ----------------------------------------------------------------------
+# 4 · TIME‑SERIES SECTION (entire panel, not filtered)
+# ----------------------------------------------------------------------
+st.subheader("📈 R&D and Financial Metrics (2015‑18)")
 
-rank_2018 = df[df['year'] == 2018][['company_id', 'company_name', 'rd']].copy()
-rank_2018['rank_2018'] = rank_2018['rd'].rank(ascending=False)
+ts = (df.groupby("year")[["rd", "ns", "capex", "op"]]
+        .sum()
+        .reset_index()
+        .assign(**{
+            "rd_growth":     lambda x: x["rd"].pct_change()*100,
+            "sales_growth":  lambda x: x["ns"].pct_change()*100,
+            "capex_growth":  lambda x: x["capex"].pct_change()*100,
+            "profit_growth": lambda x: x["op"].pct_change()*100,
+        }))
 
-ranking = pd.merge(rank_2015[['company_id', 'company_name', 'rank_2015']],
-                   rank_2018[['company_id', 'rank_2018']], on='company_id')
-ranking['rank_shift'] = ranking['rank_2015'] - ranking['rank_2018']
+fig_line = px.line(ts, x="year", y=["rd","ns","capex","op"],
+                   markers=True, labels={"value":"€ million","variable":"Metric"},
+                   template="plotly_white")
+st.plotly_chart(fig_line, use_container_width=True)
+st.dataframe(ts[["year","rd_growth","sales_growth","capex_growth","profit_growth"]],
+             hide_index=True)
 
-movers_up = ranking.sort_values(by='rank_shift', ascending=False).head(10)
-movers_down = ranking.sort_values(by='rank_shift').head(10)
+# ----------------------------------------------------------------------
+# 5 · SCATTER (rd_intensity vs profit)
+# ----------------------------------------------------------------------
+st.subheader("📊 Profit vs R&D Intensity")
 
-st.markdown("#### 🚀 Biggest Climbers")
-st.dataframe(movers_up[['company_name', 'rank_2015', 'rank_2018', 'rank_shift']])
-st.markdown("#### 📉 Biggest Decliners")
-st.dataframe(movers_down[['company_name', 'rank_2015', 'rank_2018', 'rank_shift']])
+if len(filtered) >= 5:
+    fig_scatter = px.scatter(filtered, x="rd_intensity", y="profit_margin",
+                             hover_data=["company_name","ctry_code"],
+                             color="ctry_code", template="plotly_white")
+    # quadratic fit
+    try:
+        fit = np.poly1d(np.polyfit(filtered["rd_intensity"], filtered["profit_margin"], 2))
+        xs = np.linspace(filtered["rd_intensity"].min(), filtered["rd_intensity"].max(), 200)
+        fig_scatter.add_scatter(x=xs, y=fit(xs), mode="lines", name="Quadratic fit")
+    except np.linalg.LinAlgError:
+        pass
+    st.plotly_chart(fig_scatter, use_container_width=True)
+else:
+    st.info("Need at least 5 observations to display scatter & fit.")
 
-# Company Comparison
+# ----------------------------------------------------------------------
+# 6 · SECTOR BAR (filtered year)
+# ----------------------------------------------------------------------
+st.subheader("🏭 Top R&D Intensity by Sector")
 
+sector = (df[df["year"] == year]
+          .groupby("isic4_desc")["rd_intensity"]
+          .mean()
+          .nlargest(20)
+          .reset_index())
 
-st.subheader("🏢 Top 10 R&D Firms")
-top_rd = filtered_df.sort_values(by='rd', ascending=False).head(10)
-fig_top = px.bar(top_rd, x='company_name', y='rd', color='profit_margin',
-                 labels={'rd': 'R&D (€M)', 'company_name': 'Company'})
-fig_top.update_layout(xaxis_tickangle=-45)
-st.plotly_chart(fig_top)
+fig_sector = px.bar(sector, y="isic4_desc", x="rd_intensity",
+                    orientation="h", text_auto=".2f",
+                    labels={"rd_intensity":"R&D Intensity"},
+                    template="plotly_white", color="rd_intensity",
+                    color_continuous_scale="Blues")
+fig_sector.update_layout(yaxis_title="", xaxis_tickformat=".0%")
+st.plotly_chart(fig_sector, use_container_width=True)
 
-# Patent Efficiency Analysis
-st.markdown("""#### ✅ Assumption: Efficient innovators generate more patents per euro
-**Test:** Calculate `patEP / rd` and display top 10
-**Visual:** Table showing patent efficiency and revenue per employee.""")
-st.subheader("📚 Innovation Efficiency Metrics")
+# ----------------------------------------------------------------------
+# 7 · COUNTRY R&D SPEND (filtered)
+# ----------------------------------------------------------------------
+st.subheader("🌍 R&D Investment by Country")
 
-highlight_df = filtered_df.copy()
-highlight_df['patents_per_rd'] = highlight_df['patEP'] / highlight_df['rd']
-highlight_df['revenue_per_employee'] = highlight_df['ns'] / highlight_df['emp']
+country = (filtered.groupby("ctry_code")["rd"]
+           .sum()
+           .nlargest(20)
+           .reset_index())
 
-st.markdown("### 🧪 Top Efficient Innovators")
-efficient = highlight_df.sort_values(by='patents_per_rd', ascending=False).head(10)
-st.dataframe(efficient[['company_name', 'ctry_code', 'rd', 'patEP', 'patents_per_rd', 'revenue_per_employee']])
+fig_country = px.bar(country, x="ctry_code", y="rd",
+                     color="rd", labels={"rd":"R&D (€ M)"},
+                     template="plotly_white")
+st.plotly_chart(fig_country, use_container_width=True)
 
+# ----------------------------------------------------------------------
+# 8 · RANK SHIFTS
+# ----------------------------------------------------------------------
+st.subheader("📉 R&D Rank Movers (2015 → 2018)")
 
-st.subheader("🧠 Strategic Key Insights")
-st.markdown("""
-- **R&D Leaders**: Alphabet, Samsung, Microsoft link high R&D with strong profit margins.
-- **Biotech Sector**: High R&D intensity but negative profit margin—long-term investment.
-- **Top Countries**: US, KR, JP dominate R&D spend, especially in IT & pharma.
-- **Balance Needed**: High R&D ≠ high profits. Efficiency and sector timing matter.
-- **Tip**: Use this tool to benchmark innovation strategy vs. financial return.
-""")
+r15 = df[df["year"] == 2015][["company_id","company_name","rd"]].assign(
+        rank_2015=lambda x: x["rd"].rank(ascending=False))
+r18 = df[df["year"] == 2018][["company_id","rd"]].assign(
+        rank_2018=lambda x: x["rd"].rank(ascending=False))
 
-# Download button
-csv = filtered_df.to_csv(index=False).encode('utf-8')
-st.download_button("📥 Download Filtered Data", data=csv, file_name='filtered_rd_data.csv', mime='text/csv')
+shift = (r15.merge(r18, on="company_id")
+             .assign(rank_shift=lambda x: x["rank_2015"] - x["rank_2018"]))
 
+st.write("#### 🚀 Biggest Climbers")
+st.dataframe(shift.nlargest(10, "rank_shift")
+             [["company_name","rank_2015","rank_2018","rank_shift"]],
+             hide_index=True)
+
+st.write("#### 📉 Biggest Decliners")
+st.dataframe(shift.nsmallest(10, "rank_shift")
+             [["company_name","rank_2015","rank_2018","rank_shift"]],
+             hide_index=True)
+
+# ----------------------------------------------------------------------
+# 9 · TOP‑10 FIRMS
+# ----------------------------------------------------------------------
+st.subheader("🏢 Top 10 R&D Firms (filtered)")
+
+top_rd = filtered.nlargest(10, "rd")
+fig_top = px.bar(top_rd, x="company_name", y="rd",
+                 color="profit_margin", labels={"rd":"R&D (€ M)"},
+                 template="plotly_white", color_continuous_scale="Bluered_r")
+fig_top.update_layout(xaxis_tickangle=-35)
+st.plotly_chart(fig_top, use_container_width=True)
+
+# ----------------------------------------------------------------------
+# 10 · INNOVATION EFFICIENCY TABLE
+# ----------------------------------------------------------------------
+st.subheader("📚 Innovation Efficiency Metrics")
+
+eff = (filtered.assign(patents_per_rd=lambda x: x["patEP"].div(x["rd"].replace({0:np.nan})))
+                .sort_values("patents_per_rd", ascending=False)
+                .head(10))
+st.dataframe(eff[["company_name","ctry_code","rd","patEP",
+                  "patents_per_rd","revenue_per_employee"]],
+             hide_index=True, format="%.2f")
+
+# ----------------------------------------------------------------------
+# 11 · DOWNLOAD
+# ----------------------------------------------------------------------
+st.download_button("📥 Download filtered data",
+                   data=filtered.to_csv(index=False).encode("utf‑8"),
+                   file_name="filtered_panel.csv",
+                   mime="text/csv")
