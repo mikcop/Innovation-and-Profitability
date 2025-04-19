@@ -76,6 +76,24 @@ fig_country = px.bar(country_rd, x='ctry_code', y='rd', color='rd', labels={'rd'
 st.plotly_chart(fig_country)
 
 # Company Comparison
+st.subheader("🏢 Compare Selected Companies")
+
+company_options = filtered_df['company_name'].unique()
+selected_companies = st.multiselect("Choose companies to compare", company_options)
+
+if selected_companies:
+    comp_df = filtered_df[filtered_df['company_name'].isin(selected_companies)]
+    st.markdown("### 🔍 Company R&D vs Profit Comparison")
+    fig_compare = px.bar(comp_df, x='company_name', y='rd', color='profit_margin',
+                         hover_data=['rd_intensity'],
+                         labels={'rd': 'R&D (€M)', 'company_name': 'Company', 'profit_margin': 'Profit Margin'})
+    fig_compare.update_layout(xaxis_tickangle=-45)
+    st.plotly_chart(fig_compare)
+
+    st.markdown("### 📈 Performance Table")
+    st.dataframe(comp_df[['company_name', 'ctry_code', 'isic4', 'rd', 'ns', 'op', 'rd_intensity', 'profit_margin']])
+else:
+    st.info("Select companies from the dropdown to compare their R&D and profitability.")
 st.subheader("🏢 Top 10 R&D Firms")
 top_rd = filtered_df.sort_values(by='rd', ascending=False).head(10)
 fig_top = px.bar(top_rd, x='company_name', y='rd', color='profit_margin',
