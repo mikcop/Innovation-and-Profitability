@@ -223,9 +223,42 @@ with st.expander("🏷️ ISIC Sector Legend (Top 10)"):
         st.markdown(f"**{k}**  – {v}")
 
 # ------------------------------------------------------------
-# 12 · DOWNLOAD
+# 11 · PATENTS ↔ SALES RELATIONSHIP
 # ------------------------------------------------------------
-st.download_button("📥 Download filtered data",
-                   data=filtered.to_csv(index=False).encode("utf‑8"),
-                   file_name="filtered_panel.csv",
-                   mime="text/csv")
+st.subheader("🔗 Do more patents correlate with higher sales?")
+
+if filtered.empty:
+    st.info("No data after filters.")
+else:
+    # build a total‑patent count (better: switch to IP‑family count once available)
+    filt = filtered.copy()
+    filt["total_patents"] = (
+        filt[["patCN","patEP","patJP","patKR","patUS"]].sum(axis=1)
+    )
+
+    # drop rows with zero or NaN patents / sales to avoid log issues
+    sample = filt[(filt["total_patents"] > 0) & (filt["ns"] > 0)]
+
+    if len(sample) < 5:
+        st.info("Not enough observations with both patents and sales.")
+    else:
+        # Pearson correlation
+        r = sample["total_patents"].corr(sample["ns"])
+        st.metric("Pearson r (patents vs net sales)", f"{r:.2f}")
+
+        # log‑log scatter with OLS trend‑line
+        fig_corr = px.scatter(sample,
+                              x="total_patents", y="ns",
+                              hover_data=["company_name","ctry_code"],
+                              trendline="ols", trendline_color_override="red",
+                              template="plotly_white",
+                              labels={"total_patents":"Total patents (CN+EP+JP+KR+US)",
+                                      "ns":"Net sales (€ M)"})
+        fig_corr.update_layout(xaxis_type="log", yaxis_type="log")
+        st.plotly_chart(fig_corr, use_container_width=True)
+
+        # optional: show stats of the fitted model
+        results = px.get_trendline_results(fig_corr)
+        ols_summary = results.iloc[0]["px_fit_results"].summary()
+        with st.expander("Show OLS details"):
+            st.text(ols_summary)
