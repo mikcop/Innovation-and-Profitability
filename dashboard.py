@@ -55,7 +55,9 @@ with st.expander("📘 Variable Legend (Legenda Variabili)"):
     """)
 
 # Time-Series Chart
-st.markdown("#### ✅ Assumption: Firms that invest in R&D consistently grow in scale\n**Test:** Examine time-series of R&D, sales, CAPEX, and profit.\n**Visual:** Line chart + growth rate table shows trends from 2015 to 2018.")
+st.markdown("#### ✅ Assumption: Firms that invest in R&D consistently grow in scale
+**Test:** Examine time-series of R&D, sales, CAPEX, and profit.
+**Visual:** Line chart + growth rate table shows trends from 2015 to 2018.")
 st.subheader("📈 R&D and Financial Metrics Over Time")
 time_series = df.groupby('year')[['rd', 'ns', 'capex', 'op']].sum().reset_index()
 time_series['rd_growth'] = time_series['rd'].pct_change() * 100
@@ -71,7 +73,9 @@ st.markdown("### 📊 Year-on-Year Growth Rates")
 st.dataframe(time_series[['year', 'rd_growth', 'sales_growth', 'capex_growth', 'profit_growth']])
 
 # Scatter: R&D Intensity vs Profit Margin (with Polynomial Fit)
-st.markdown("#### ✅ Assumption: R&D intensity improves profit, but only to a point\n**Test:** Quadratic regression tests for inverted-U between R&D intensity and profit margin.\n**Visual:** Scatterplot with fitted curve.")
+st.markdown("#### ✅ Assumption: R&D intensity improves profit, but only to a point
+**Test:** Quadratic regression tests for inverted-U between R&D intensity and profit margin.
+**Visual:** Scatterplot with fitted curve.")
 
 fig_scatter = px.scatter(filtered_df, x='rd_intensity', y='profit_margin',
                          hover_data=['company_name'], color='ctry_code',
@@ -90,10 +94,12 @@ st.plotly_chart(fig_scatter)
 
 
 # Bar: Sector-level R&D Intensity
-st.markdown("#### ✅ Assumption: R&D intensity differs strongly across industries\n**Test:** Compare mean R&D intensity across ISIC sectors.\n**Visual:** Top 10 bar chart with ISIC legend.")
+st.markdown("#### ✅ Assumption: R&D intensity differs strongly across industries
+**Test:** Compare mean R&D intensity across ISIC sectors.
+**Visual:** Top 10 bar chart with ISIC legend.")
 st.subheader("🏭 Top Avg R&D Intensity by Sector")
 sector_group = df[df['year'] == selected_year].groupby('isic4')['rd_intensity'].mean().reset_index()
-sector_group = sector_group.sort_values(by='rd_intensity', ascending=False).head(10)
+sector_group = sector_group.sort_values(by='rd_intensity', ascending=False).head(20)
 fig_sector = px.bar(sector_group, x='isic4', y='rd_intensity', labels={'rd_intensity': 'R&D Intensity'})
 st.plotly_chart(fig_sector)
 
@@ -112,14 +118,19 @@ with st.expander("🏷️ Sector Legend (ISIC4 to Description)"):
     """)
 
 # Country Comparison
-st.markdown("#### ✅ Assumption: High R&D by country aligns with innovation leadership\n**Test:** Compare country R&D totals\n**Visual:** Bar chart by country for selected year.")
+st.markdown("#### ✅ Assumption: High R&D by country aligns with innovation leadership
+**Test:** Compare country R&D totals
+**Visual:** Bar chart by country for selected year.")
 st.subheader("🌍 R&D Investment by Country")
 country_rd = filtered_df.groupby('ctry_code')['rd'].sum().reset_index()
+country_rd = country_rd.sort_values(by='rd', ascending=False).head(20)
 fig_country = px.bar(country_rd, x='ctry_code', y='rd', color='rd', labels={'rd': 'R&D (€M)'})
 st.plotly_chart(fig_country)
 
 # Company R&D Rank Shifts
-st.markdown("#### ✅ Assumption: Global R&D leaders shift slowly, but top movers exist\n**Test:** Rank changes from 2015 to 2018\n**Visual:** Tables of biggest climbers and decliners.")
+st.markdown("#### ✅ Assumption: Global R&D leaders shift slowly, but top movers exist
+**Test:** Rank changes from 2015 to 2018
+**Visual:** Tables of biggest climbers and decliners.")
 st.subheader("📉 Top Movers in R&D Ranking (2015–2018)")
 rank_2015 = df[df['year'] == 2015][['company_id', 'company_name', 'rd']].copy()
 rank_2015['rank_2015'] = rank_2015['rd'].rank(ascending=False)
@@ -150,7 +161,9 @@ fig_top.update_layout(xaxis_tickangle=-45)
 st.plotly_chart(fig_top)
 
 # Patent Efficiency Analysis
-st.markdown("#### ✅ Assumption: Efficient innovators generate more patents per euro\n**Test:** Calculate `patEP / rd` and display top 10\n**Visual:** Table showing patent efficiency and revenue per employee.")
+st.markdown("#### ✅ Assumption: Efficient innovators generate more patents per euro
+**Test:** Calculate `patEP / rd` and display top 10
+**Visual:** Table showing patent efficiency and revenue per employee.")
 st.subheader("📚 Innovation Efficiency Metrics")
 
 highlight_df = filtered_df.copy()
