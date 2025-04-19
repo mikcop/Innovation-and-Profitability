@@ -129,10 +129,13 @@ st.sidebar.subheader("Outlier Display Options")
 view_mode = st.sidebar.radio("Select outlier type to display:", ["Underperformers", "Outperformers", "Both"])
 
 # Calculate underperformers and outperformers
-underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(rd_q)) &
+underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(0.75)) &
+                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))] > highlight_df['rd_intensity'].quantile(rd_q)) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))]
 
-outperformers = highlight_df[(highlight_df['rd_intensity'] < highlight_df['rd_intensity'].quantile(1 - rd_q)) &
+outperformers = highlight_df[(highlight_df['rd_intensity'] < highlight_df['rd_intensity'].quantile(0.25)) &
+                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(0.75))] < highlight_df['rd_intensity'].quantile(1 - rd_q)) &
+                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(1 - profit_q))] < highlight_df['rd_intensity'].quantile(1 - rd_q)) &
                               (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(1 - profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
