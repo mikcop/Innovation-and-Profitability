@@ -29,6 +29,20 @@ filtered_df = df[(df['year'] == selected_year) &
 
 st.title("Corporate R&D Innovation Dashboard")
 
+st.markdown("""
+### 📘 Variable Legend (Legenda Variabili)
+- **rd**: R&D investment (in million €) / Investimenti in R&S (in milioni di euro)
+- **ns**: Net sales (in million €) / Fatturato netto (in milioni di euro)
+- **capex**: Capital expenditures (in million €) / Spese in conto capitale
+- **op**: Operating profits (in million €) / Profitti operativi
+- **emp**: Number of employees / Dipendenti
+- **rd_intensity**: R&D as a % of net sales / Intensità di R&S (% su vendite)
+- **profit_margin**: Operating profits as a % of net sales / Margine operativo (% su vendite)
+- **ctry_code**: Country code (ISO) / Codice paese
+- **isic4**: ISIC Rev.4 sector classification / Settore industriale (ISIC Rev.4)
+- **patEP**: Patent counts (European Patent Office) / Brevetti EPO
+""")
+
 # Time-Series (full sample)
 st.subheader("R&D and Financial Metrics Over Time")
 time_series = df.groupby('year')[['rd', 'ns', 'capex', 'op']].sum().reset_index()
@@ -54,9 +68,20 @@ st.plotly_chart(fig_sector)
 
 # Bar Chart: Country-wise R&D
 st.subheader("Country Comparison: R&D Investment")
-country_rd = filtered_df.groupby('ctry_code')['rd'].sum().reset_index()
-fig_bar = px.bar(country_rd, x='ctry_code', y='rd', color='rd', labels={'rd': 'R&D (€M)'})
-st.plotly_chart(fig_bar)
+country_rd = filtered_df.groupby('ctry_code')[['rd', 'ns', 'capex', 'op']].sum().reset_index()
+fig_bar_ctry = px.bar(country_rd, x='ctry_code', y=['rd', 'ns', 'capex', 'op'], barmode='group',
+                      labels={'value': '€M', 'variable': 'Metric', 'ctry_code': 'Country'})
+st.plotly_chart(fig_bar_ctry)
+
+# Company Comparison
+st.subheader("Company Comparison: R&D vs Performance")
+company_comp = filtered_df.groupby('company_name')[['rd', 'ns', 'op', 'rd_intensity', 'profit_margin']].mean().reset_index()
+top_companies = company_comp.sort_values(by='rd', ascending=False).head(20)
+fig_company = px.bar(top_companies, x='company_name', y='rd', color='profit_margin',
+                     labels={'rd': 'R&D (€M)', 'company_name': 'Company', 'profit_margin': 'Profit Margin'},
+                     title='Top 20 R&D Investors and their Profit Margins')
+fig_company.update_layout(xaxis_tickangle=-45)
+st.plotly_chart(fig_company)
 
 # Scatter Plot: R&D Intensity vs Profit Margin
 st.subheader("R&D Intensity vs Profit Margin")
@@ -77,6 +102,20 @@ st.dataframe(top_rd[['company_name', 'rd', 'ns', 'op', 'rd_intensity', 'profit_m
 # Filtered Company-Level Table
 st.subheader("Filtered Company-Level Data")
 st.dataframe(filtered_df[['company_name', 'ctry_code', 'isic4', 'rd', 'ns', 'op', 'rd_intensity', 'profit_margin']])
+
+st.subheader("🔍 Strategic Key Insights")
+st.markdown("""
+- **Top R&D Investors** such as Alphabet, Samsung, and Microsoft maintain high R&D intensity paired with strong profit margins, showing mature innovation-to-market cycles.
+- **Biotech & Pharma** sectors (e.g., TANVEX, OBSEVA) often show very high R&D intensity but negative profit margins due to long development horizons.
+- **Country Highlights**:
+  - **US**: Highest R&D spend and patenting activity, especially in IT and pharma.
+  - **Germany & Japan**: Consistent investment in automotive and manufacturing sectors.
+  - **South Korea & China**: Rapid rise in R&D intensity in electronics.
+- **Correlation Trends**:
+  - R&D intensity does **not linearly predict profitability**; efficient R&D management and sector context are critical.
+  - Larger firms (by sales and headcount) tend to show stronger performance correlations.
+- **Strategy Tip**: Firms should monitor R&D intensity to ensure it's aligned with expected market returns, and invest in IP management to turn innovation into competitive advantage.
+""")
 
 # Download button
 csv = filtered_df.to_csv(index=False).encode('utf-8')
