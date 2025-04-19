@@ -192,6 +192,7 @@ view_mode = st.sidebar.radio("Select outlier type to display:", ["Underperformer
 
 # Calculate underperformers and outperformers
 underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(rd_q)) &
+                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))]) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))]
 if not underperformers.empty:
