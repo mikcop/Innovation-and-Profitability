@@ -88,24 +88,8 @@ if not underperformers.empty:
         text=underperformers['company_name']
     )
 st.plotly_chart(fig_scatter)
-st.subheader("📌 R&D Intensity vs Profit Margin (Inverted-U Trend)")
 
-fig_scatter = px.scatter(filtered_df, x='rd_intensity', y='profit_margin',
-                         hover_data=['company_name'], color='ctry_code')
 
-# Polynomial fit
-fit = np.polyfit(filtered_df['rd_intensity'], filtered_df['profit_margin'], 2)
-fit_fn = np.poly1d(fit)
-
-rd_range_vals = np.linspace(filtered_df['rd_intensity'].min(), filtered_df['rd_intensity'].max(), 200)
-profit_pred = fit_fn(rd_range_vals)
-
-fig_scatter.add_scatter(x=rd_range_vals, y=profit_pred, mode='lines', name='Quadratic Fit')
-st.plotly_chart(fig_scatter)
-st.subheader("📌 R&D Intensity vs Profit Margin")
-fig_scatter = px.scatter(filtered_df, x='rd_intensity', y='profit_margin',
-                         hover_data=['company_name'], color='ctry_code')
-st.plotly_chart(fig_scatter)
 
 # Bar: Sector-level R&D Intensity
 st.subheader("🏭 Avg R&D Intensity by Sector")
@@ -120,54 +104,8 @@ fig_country = px.bar(country_rd, x='ctry_code', y='rd', color='rd', labels={'rd'
 st.plotly_chart(fig_country)
 
 # Company Comparison
-st.subheader("🏢 Compare Selected Companies")
 
-company_options = filtered_df['company_name'].unique()
-selected_companies = st.multiselect("Choose companies to compare", company_options)
 
-if selected_companies:
-    comp_df = filtered_df[filtered_df['company_name'].isin(selected_companies)]
-    st.markdown("### 🔍 Company R&D vs Profit Comparison")
-    fig_compare = px.bar(comp_df, x='company_name', y='rd', color='profit_margin',
-                         hover_data=['rd_intensity'],
-                         labels={'rd': 'R&D (€M)', 'company_name': 'Company', 'profit_margin': 'Profit Margin'})
-    fig_compare.update_layout(xaxis_tickangle=-45)
-    st.plotly_chart(fig_compare)
-
-    st.markdown("### 📈 Performance Table")
-    st.dataframe(comp_df[['company_name', 'ctry_code', 'isic4', 'rd', 'ns', 'op', 'rd_intensity', 'profit_margin']])
-
-    st.markdown("### 📊 KPI Overview")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Average R&D Intensity", f"{comp_df['rd_intensity'].mean():.2%}")
-    col2.metric("Average Profit Margin", f"{comp_df['profit_margin'].mean():.2%}")
-    col3.metric("Top R&D Investor", comp_df.loc[comp_df['rd'].idxmax(), 'company_name'])
-
-    st.markdown("### 📉 Trend Over Time")
-    trend_df = df[df['company_name'].isin(selected_companies)]
-    trend_fig = px.line(trend_df, x='year', y='rd', color='company_name', markers=True,
-                        labels={'rd': 'R&D (€M)', 'year': 'Year'})
-    st.plotly_chart(trend_fig)
-else:
-    st.info("Select companies from the dropdown to compare their R&D and profitability.")
-st.subheader("🏢 Compare Selected Companies")
-
-company_options = filtered_df['company_name'].unique()
-selected_companies = st.multiselect("Choose companies to compare", company_options)
-
-if selected_companies:
-    comp_df = filtered_df[filtered_df['company_name'].isin(selected_companies)]
-    st.markdown("### 🔍 Company R&D vs Profit Comparison")
-    fig_compare = px.bar(comp_df, x='company_name', y='rd', color='profit_margin',
-                         hover_data=['rd_intensity'],
-                         labels={'rd': 'R&D (€M)', 'company_name': 'Company', 'profit_margin': 'Profit Margin'})
-    fig_compare.update_layout(xaxis_tickangle=-45)
-    st.plotly_chart(fig_compare)
-
-    st.markdown("### 📈 Performance Table")
-    st.dataframe(comp_df[['company_name', 'ctry_code', 'isic4', 'rd', 'ns', 'op', 'rd_intensity', 'profit_margin']])
-else:
-    st.info("Select companies from the dropdown to compare their R&D and profitability.")
 st.subheader("🏢 Top 10 R&D Firms")
 top_rd = filtered_df.sort_values(by='rd', ascending=False).head(10)
 fig_top = px.bar(top_rd, x='company_name', y='rd', color='profit_margin',
@@ -192,6 +130,11 @@ view_mode = st.sidebar.radio("Select outlier type to display:", ["Underperformer
 
 # Calculate underperformers and outperformers
 underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(rd_q)) &
+                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))]
+
+outperformers = highlight_df[(highlight_df['rd_intensity'] < highlight_df['rd_intensity'].quantile(1 - rd_q)) &
+                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(1 - profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
+                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))] > highlight_df['rd_intensity'].quantile(rd_q)) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))]) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))]
