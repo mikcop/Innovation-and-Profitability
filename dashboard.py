@@ -192,18 +192,7 @@ view_mode = st.sidebar.radio("Select outlier type to display:", ["Underperformer
 
 # Calculate underperformers and outperformers
 underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(rd_q)) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))]
-outperformers = highlight_df[(highlight_df['rd_intensity'] < highlight_df['rd_intensity'].quantile(1 - rd_q)) &
-                              (highlight_df['profit_margin'] > highlight_df['profit_margin'].quantile(1 - profit_q))]
-st.sidebar.markdown("---")
-st.sidebar.subheader("Outlier Filter Settings")
-rd_q = st.sidebar.slider("R&D Intensity Quantile Threshold", 0.5, 1.0, 0.75)
-profit_q = st.sidebar.slider("Profit Margin Quantile Threshold", 0.0, 0.5, 0.25)
-
-# Performance Outlier Filter
-st.subheader("⚠️ Underperformers: High R&D, Low Profit")
-underperformers = highlight_df[(highlight_df['rd_intensity'] > highlight_df['rd_intensity'].quantile(rd_q)) &
-                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))] > highlight_df['rd_intensity'].quantile(0.75)) &
+                                (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(profit_q))]) &
                                 (highlight_df['profit_margin'] < highlight_df['profit_margin'].quantile(0.25))]
 if not underperformers.empty:
     st.markdown("### 🚨 High R&D Spend, Low Profit Margin")
