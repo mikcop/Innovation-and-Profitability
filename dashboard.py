@@ -5,8 +5,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Load data
-df = pd.read_csv("panel_2015_2018.csv")
+# Load data with sampling
+full_df = pd.read_csv("panel_2015_2018.csv")
+df = df.sort_values(by=['year', 'rd'], ascending=[True, False])
+df = df.groupby('year').head(1000).reset_index(drop=True)
+# Sample: 1000 companies across years, preserving diversity
+sampled_ids = full_df['company_id'].drop_duplicates().sample(n=1000, random_state=42)
+df = full_df[full_df['company_id'].isin(sampled_ids)]
 
 # Data preprocessing
 df['rd_intensity'] = df['rd'] / df['ns']
