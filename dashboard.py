@@ -1,17 +1,15 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
 
-# Load data with sampling
+# Load data and filter for top 1000 firms by global rank
 full_df = pd.read_csv("panel_2015_2018.csv")
+full_df = full_df[full_df['worldrank'] <= 1000].copy()
+
+# Sort by year and R&D, select top 1000 firms per year
 df = full_df.sort_values(by=['year', 'rd'], ascending=[True, False])
 df = df.groupby('year').head(1000).reset_index(drop=True)
-
-# Sample 1000 companies, preserving diversity
-sampled_ids = full_df['company_id'].drop_duplicates().sample(n=1000, random_state=42)
-df = full_df[full_df['company_id'].isin(sampled_ids)]
 
 # Data preprocessing
 df['rd_intensity'] = df['rd'] / df['ns']
