@@ -140,9 +140,8 @@ num_kpis = 4
 if not pd.isna(kpi_pat_ip5): num_kpis += 1
 if not pd.isna(kpi_tm_total): num_kpis += 1
 
-st.header(f"R&D Investment Analysis ({sel_year})")
-st.markdown(f"Based on {len(df)} companies matching filters: **Countries:** {', '.join(sel_countries)}, **Sectors:** {', '.join(sel_sectors)}")
-
+# Corrected line 144
+st.markdown(f"Based on {len(df)} companies matching filters: **Countries:** {', '.join(map(str, sel_countries))}, **Sectors:** {', '.join(map(str, sel_sectors))}")
 kpi_cols = st.columns(num_kpis)
 
 kpi_cols[0].metric("Total R&D (€ M)", f"{kpi_rd:,.0f}" if not pd.isna(kpi_rd) else "N/A")
