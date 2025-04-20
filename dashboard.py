@@ -1,61 +1,59 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import numpy as np
+import plotly.express as px
 
-# Load data
-df = pd.read_csv("panel_2015_2018.csv")
+# Load data (replace with actual data path or connector)
+df = pd.read_csv("panel_2015_2018.csv")  # Replace with actual path if needed
 
-# Clean and enrich data
-df['total_patents'] = df[['patCN', 'patEP', 'patJP', 'patKR', 'patUS']].sum(axis=1)
-df.dropna(subset=['rd', 'op'], inplace=True)
+# Data preprocessing
+df['rd_intensity'] = df['rd'] / df['ns']
+df['profit_margin'] = df['op'] / df['ns']
 
 # Sidebar filters
-st.sidebar.title("🔎 Filters")
-year = st.sidebar.selectbox("Select Year", sorted(df['year'].unique()))
-min_rank, max_rank = st.sidebar.slider("World Rank Range", 1, df['worldrank'].max(), (1, 100))
-selected_country = st.sidebar.multiselect("Country", df['ctry_code'].unique(), default=list(df['ctry_code'].unique()))
+st.sidebar.title("Filter Data")
+selected_year = st.sidebar.selectbox("Select Year", sorted(df['year'].unique()))
+selected_country = st.sidebar.multiselect("Select Country", df['ctry_code'].unique(), default=df['ctry_code'].unique())
+selected_sector = st.sidebar.multiselect("Select Sector (ISIC4)", df['isic4'].unique(), default=df['isic4'].unique())
+rd_range = st.sidebar.slider("R&D Intensity Range", 0.0, 10.0, (0.0, 2.0))
+profit_range = st.sidebar.slider("Profit Margin Range", -2.0, 2.0, (-1.0, 1.0))
 
-# Apply filters
-filtered_df = df[(df['year'] == year) &
-                 (df['worldrank'].between(min_rank, max_rank)) &
-                 (df['ctry_code'].isin(selected_country))]
+# Filter data
+filtered_df = df[(df['year'] == selected_year) &
+                 (df['ctry_code'].isin(selected_country)) &
+                 (df['isic4'].isin(selected_sector)) &
+                 (df['rd_intensity'].between(*rd_range)) &
+                 (df['profit_margin'].between(*profit_range))]
 
-st.title("📈 Innovation & Profitability Dashboard")
-st.markdown("""
-This dashboard explores whether innovation (R&D, patents) correlates with company profitability.
-Use the sidebar to filter by year, country, and world rank.
-""")
+st.title("Corporate R&D Innovation Dashboard")
 
-# Section 1: Overview
-st.header("1. Key Innovation & Performance Metrics")
-st.metric("Total R&D Investment", f"${filtered_df['rd'].sum():,.0f}")
-st.metric("Total Operating Profit", f"${filtered_df['op'].sum():,.0f}")
-st.metric("Total Patents", f"{int(filtered_df['total_patents'].sum())}")
+# Time-Series (full sample)
+st.subheader("R&D and Financial Metrics Over Time")
+time_series = df.groupby('year')[['rd', 'ns', 'capex', 'op']].sum().reset_index()
+fig_line = px.line(time_series, x='year', y=['rd', 'ns', 'capex', 'op'], markers=True,
+                   labels={'value': 'Million €', 'variable': 'Metric'})
+st.plotly_chart(fig_line)
 
-# Section 2: Regression Analysis
-st.header("2. Regression: R&D and Patents vs Profit")
-fig, axs = plt.subplots(1, 2, figsize=(14, 5))
-sns.regplot(data=filtered_df, x='rd', y='op', ax=axs[0])
-axs[0].set_title('R&D vs Operating Profit')
-sns.regplot(data=filtered_df, x='total_patents', y='op', ax=axs[1])
-axs[1].set_title('Total Patents vs Operating Profit')
-st.pyplot(fig)
+# Bar Chart: Country-wise R&D
+st.subheader("Country Comparison: R&D Investment")
+country_rd = filtered_df.groupby('ctry_code')['rd'].sum().reset_index()
+fig_bar = px.bar(country_rd, x='ctry_code', y='rd', color='rd', labels={'rd': 'R&D (€M)'})
+st.plotly_chart(fig_bar)
 
-# Correlation display
-corr_val = filtered_df[['rd', 'total_patents', 'op']].corr()
-st.subheader("Correlation Matrix")
-st.dataframe(corr_val.style.background_gradient(cmap='coolwarm'))
+# Scatter Plot: R&D Intensity vs Profit Margin
+st.subheader("R&D Intensity vs Profit Margin")
+fig_scatter = px.scatter(filtered_df, x='rd_intensity', y='profit_margin',
+                         hover_data=['company_name'], color='ctry_code')
+st.plotly_chart(fig_scatter)
 
-# Section 3: Multivariate Analysis
-st.header("3. Multivariate Exploration")
-selected_vars = st.multiselect("Select Variables for Pairplot", ['rd', 'op', 'capex', 'ns', 'emp', 'total_patents'], default=['rd', 'op', 'total_patents'])
-if len(selected_vars) > 1:
-    sns.set(style="ticks")
-    fig_pair = sns.pairplot(filtered_df[selected_vars].dropna())
-    st.pyplot(fig_pair)
+# Histogram: Patent & Trademark Counts
+st.subheader("Patent and Trademark Histogram")
+fig_hist = px.histogram(filtered_df, x='patEP', nbins=30, title='European Patents')
+st.plotly_chart(fig_hist)
 
-# Section 4: Firm-level Explorer
-st.header("4. Company-Level Data Explorer")
-st.dataframe(filtered_df[['company_name', 'ctry_code', 'worldrank', 'rd', 'op', 'total_patents']].sort_values(by='op', ascending=False))
+# Table of filtered firms
+st.subheader("Filtered Company-Level Data")
+st.dataframe(filtered_df[['company_name', 'ctry_code', 'isic4', 'rd', 'ns', 'op', 'rd_intensity', 'profit_margin']])
+
+# Download link
+csv = filtered_df.to_csv(index=False).encode('utf-8')
+st.download_button("Download Filtered Data", data=csv, file_name='filtered_rd_data.csv', mime='text/csv')
