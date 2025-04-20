@@ -8,7 +8,7 @@ import numpy as np
 # Load full data
 full_df = pd.read_csv("panel_2015_2018.csv")
 df = full_df.copy()
-df = full_df.groupby('year').head(1000).reset_index(drop=True).isin(sampled_ids)]
+df = full_df.copy()
 
 # Data preprocessing
 df['rd_intensity'] = df['rd'] / df['ns']
