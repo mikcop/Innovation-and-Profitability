@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # Load data
 @st.cache_data
 def load_data():
-    df = pd.read_excel("panel_2015_2018 (1).xlsx", sheet_name="Dataset")
+    df = pd.read_excel("panel_2015_2018.csv", sheet_name="Dataset")
     return df
 
 df = load_data()
