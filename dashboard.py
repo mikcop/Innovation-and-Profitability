@@ -1,134 +1,62 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import seaborn as sns
 import matplotlib.pyplot as plt
-import numpy as np
 
-# Configure page
-st.set_page_config(page_title="Company Panel Dashboard", layout="wide")
-
+# Load data
 @st.cache_data
-# Load and cache data
 def load_data():
-    df = pd.read_csv('panel_2015_2018.csv')
+    df = pd.read_excel("panel_2015_2018 (1).xlsx", sheet_name="Dataset")
     return df
 
 df = load_data()
 
+# Title
+st.title("Company Innovation & Financial Dashboard (2015–2018)")
+
 # Sidebar filters
 st.sidebar.header("Filters")
-# Year slider
-years = sorted(df['year'].unique())
-selected_year = st.sidebar.slider(
-    "Select Year",
-    min_value=int(min(years)),
-    max_value=int(max(years)),
-    value=int(max(years))
-)
+selected_country = st.sidebar.multiselect("Select Country", options=sorted(df['ctry_code'].dropna().unique()), default=['US'])
+selected_years = st.sidebar.multiselect("Select Year", options=sorted(df['year'].dropna().unique()), default=[2018])
+selected_ranks = st.sidebar.slider("Select World Rank Range", int(df['worldrank'].min()), int(df['worldrank'].max()), (1, 100))
 
-# Country selector
-countries = sorted(df['ctry_code'].unique())
-selected_countries = st.sidebar.multiselect(
-    "Select Countries",
-    options=countries,
-    default=countries
-)
-
-# World rank range slider
-min_wr, max_wr = int(df['worldrank'].min()), int(df['worldrank'].max())
-selected_wr = st.sidebar.slider(
-    "Select World Rank Range",
-    min_value=min_wr,
-    max_value=max_wr,
-    value=(min_wr, max_wr)
-)
-
-# Metric selection
-metrics = ['rd', 'ns', 'capex', 'op', 'emp']
-metric = st.sidebar.selectbox(
-    "Select Metric",
-    options=metrics,
-    index=0
-)
-
-# Apply filters
 filtered_df = df[
-    (df['year'] == selected_year) &
-    (df['ctry_code'].isin(selected_countries)) &
-    (df['worldrank'] >= selected_wr[0]) &
-    (df['worldrank'] <= selected_wr[1])
+    df['ctry_code'].isin(selected_country) &
+    df['year'].isin(selected_years) &
+    df['worldrank'].between(selected_ranks[0], selected_ranks[1])
 ]
 
-# Main dashboard title
-st.title(f"Company Panel Dashboard — {selected_year}")
+# Show filtered data
+st.subheader("Filtered Data Preview")
+st.dataframe(filtered_df.head(20))
 
-# Top 10 Companies by Metric
-st.subheader(f"Top 10 Companies by {metric.upper()}")
-# Ensure filtered_df sorted by selected metric then worldrank
-top10 = filtered_df.nlargest(10, metric)
-fig1 = px.bar(
-    top10,
-    x='company_name',
-    y=metric,
-    color='ctry_code',
-    labels={metric: metric.upper(), 'company_name': 'Company'},
-    title=None
-)
-st.plotly_chart(fig1, use_container_width=True)
+# KPI Summary
+st.subheader("Key Performance Indicators")
+kpi1 = filtered_df['rd'].sum()
+kpi2 = filtered_df['ns'].sum()
+kpi3 = filtered_df['emp'].sum()
 
-# Scatter: R&D vs Net Sales
-st.subheader("R&D vs Net Sales")
-fig2 = px.scatter(
-    filtered_df,
-    x='rd',
-    y='ns',
-    color='ctry_code',
-    size='emp',
-    hover_data=['company_name', 'worldrank'],
-    labels={'rd': 'R&D Expenditure', 'ns': 'Net Sales', 'emp': 'Employees'},
-    title=None
-)
-st.plotly_chart(fig2, use_container_width=True)
+col1, col2, col3 = st.columns(3)
+col1.metric("Total R&D Investment", f"${kpi1:,.0f}")
+col2.metric("Total Net Sales", f"${kpi2:,.0f}")
+col3.metric("Total Employment", f"{kpi3:,.0f} Employees")
 
-# Patent Distribution Heatmap for Selected Company
-st.subheader("Patent Distribution Over Years")
-company_list = sorted(df['company_name'].unique())
-selected_company = st.selectbox("Select Company", company_list)
-company_df = df[df['company_name'] == selected_company]
-patent_cols = ['patCN', 'patEP', 'patJP', 'patKR', 'patUS']
+# Line chart: R&D over time
+st.subheader("R&D Investment Over Time")
+rd_time = df[df['ctry_code'].isin(selected_country)].groupby(['year', 'ctry_code'])['rd'].sum().unstack()
+st.line_chart(rd_time)
 
-# Prepare heatmap data
-hm_df = company_df.set_index('year')[patent_cols]
-fig3, ax = plt.subplots()
-sns.heatmap(
-    hm_df,
-    annot=True,
-    fmt=".0f",
-    linewidths=0.5,
-    cmap='Blues',
-    ax=ax
-)
-ax.set_ylabel("Year")
-ax.set_xlabel("Patent Region")
-ax.set_title(f"Patents for {selected_company}")
-st.pyplot(fig3)
+# Bar chart: Top 10 companies by R&D
+st.subheader("Top 10 Companies by R&D Investment")
+top_companies = filtered_df.groupby('company_name')['rd'].sum().nlargest(10)
+fig, ax = plt.subplots()
+top_companies.plot(kind='barh', ax=ax)
+ax.set_xlabel("R&D Investment")
+ax.set_ylabel("Company")
+st.pyplot(fig)
 
-# Correlation Matrix
-st.subheader("Correlation Matrix of Metrics")
-corr = filtered_df.select_dtypes(include=np.number).corr()
-fig4, ax2 = plt.subplots(figsize=(8, 6))
-sns.heatmap(
-    corr,
-    annot=True,
-    fmt=".2f",
-    linewidths=0.5,
-    cmap='coolwarm',
-    ax=ax2
-)
-ax2.set_title("Correlation Matrix")
-st.pyplot(fig4)
-
-# Footer
-st.markdown("---")
-st.markdown("*Dashboard powered by Streamlit | Data: Panel 2015-2018* ")
+# Patent summary table
+st.subheader("Patent Summary")
+patents = filtered_df[['company_name', 'patCN', 'patEP', 'patJP', 'patKR', 'patUS']].dropna()
+patents['Total Patents'] = patents[['patCN', 'patEP', 'patJP', 'patKR', 'patUS']].sum(axis=1)
+patents = patents.sort_values(by='Total Patents', ascending=False).head(10)
+st.dataframe(patents)
