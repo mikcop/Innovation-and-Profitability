@@ -11,7 +11,7 @@ st.set_page_config(page_title="Company Panel Dashboard", layout="wide")
 @st.cache_data
 # Load and cache data
 def load_data():
-    df = pd.read_csv('/mnt/data/panel_2015_2018.csv')
+    df = pd.read_csv('panel_2015_2018.csv')
     return df
 
 df = load_data()
