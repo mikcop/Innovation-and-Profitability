@@ -125,6 +125,9 @@ fig_sector.update_layout(
     xaxis_title='R&D Intensity (%)',
     plot_bgcolor='rgba(0,0,0,0)',
     xaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
+    title_font_size=18,
+    xaxis_tickangle=-45
+),
     title_font_size=18
 )',
     xaxis_tickangle=-45,
@@ -155,7 +158,23 @@ st.markdown("""#### ✅ Assumption: High R&D by country aligns with innovation l
 st.subheader("🌍 R&D Investment by Country")
 country_rd = filtered_df.groupby('ctry_code')['rd'].sum().reset_index()
 country_rd = country_rd.sort_values(by='rd', ascending=False).head(20)
-fig_country = px.bar(country_rd, x='ctry_code', y='rd', color='rd', labels={'rd': 'R&D (€M)'})
+fig_country = px.bar(
+    country_rd,
+    y='ctry_code',
+    x='rd',
+    orientation='h',
+    labels={'rd': 'R&D (€M)', 'ctry_code': 'Country'},
+    title='Top 20 Countries by R&D Investment',
+    text_auto='.2f',
+    color='rd',
+    color_continuous_scale='Blues')
+fig_country.update_layout(
+    yaxis_title='Country Code',
+    xaxis_title='R&D Investment (€M)',
+    plot_bgcolor='rgba(0,0,0,0)',
+    xaxis=dict(gridcolor='rgba(128,128,128,0.2)'),
+    title_font_size=18
+)
 st.plotly_chart(fig_country)
 
 # Company R&D Rank Shifts
