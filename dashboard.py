@@ -14,13 +14,6 @@ st.set_page_config(
 
 @st.cache_data(show_spinner="Loading data …")
 def load_data():
-    """Read merged panel dataset.
-
-    Expected column names (case‑sensitive):
-        company_id, company_name, ctry_code, worldrank,
-        nace2, isic4, year, rd, ns, capex, op, emp,
-        patCN, patEP, patJP, patKR, patUS, TMnEU, TMnUS
-    """
     df = pd.read_csv("panel_2015_2018.csv")
 
     numeric_cols = [
@@ -44,12 +37,12 @@ sel_year = st.sidebar.selectbox("Year", years, index=len(years) - 1)
 
 countries = sorted(df["ctry_code"].dropna().unique())
 sel_countries = st.sidebar.multiselect(
-    "Country", options=countries, default=countries, placeholder="Select country codes"
+    "Country", options=countries, default=countries
 )
 
 sectors = sorted(df["nace2"].dropna().unique())
 sel_sectors = st.sidebar.multiselect(
-    "Sector (NACE2)", options=sectors, default=sectors, placeholder="Select sectors"
+    "Sector (NACE2)", options=sectors, default=sectors
 )
 
 # --------------------------------------------------
@@ -71,8 +64,11 @@ if filtered.empty:
 # 4. DERIVED METRICS
 # --------------------------------------------------
 
+filtered = filtered.copy()
 filtered["rd_intensity"] = filtered["rd"] / filtered["ns"]
 filtered["op_margin"] = filtered["op"] / filtered["ns"]
+
+filtered = filtered.replace([np.inf, -np.inf], np.nan).dropna(subset=["rd_intensity", "op_margin", "ns"])
 
 kpi_rd = filtered["rd"].sum()
 kpi_ns = filtered["ns"].sum()
@@ -92,8 +88,8 @@ tm_total = filtered[tm_cols].fillna(0).sum().sum() if tm_cols else np.nan
 num_kpis = 6 if not np.isnan(pat_ip5) else 4
 cols = st.columns(num_kpis)
 
-cols[0].metric("Total R&D (€ M)", f"{kpi_rd:,.0f}")
-cols[1].metric("Total Net Sales (€ M)", f"{kpi_ns:,.0f}")
+cols[0].metric("Total R&D (€ M)", f"{kpi_rd:,.0f}")
+cols[1].metric("Total Net Sales (€ M)", f"{kpi_ns:,.0f}")
 cols[2].metric("R&D Intensity", f"{kpi_rd_intensity:.2%}")
 cols[3].metric("Operating Margin", f"{kpi_op_margin:.2%}")
 
@@ -115,9 +111,9 @@ fig_bar = px.bar(
     x="company_name",
     y="rd",
     text="rd",
-    labels={"rd": "R&D (€ Million)", "company_name": "Company"},
+    labels={"rd": "R&D (€ Million)", "company_name": "Company"},
 )
-fig_bar.update_layout(xaxis_tickangle=-35, yaxis_title="R&D (€ M)")
+fig_bar.update_layout(xaxis_tickangle=-35, yaxis_title="R&D (€ M)")
 st.plotly_chart(fig_bar, use_container_width=True)
 
 # --------------------------------------------------
@@ -136,7 +132,7 @@ fig_scatter = px.scatter(
     labels={
         "rd_intensity": "R&D Intensity (R&D / Net Sales)",
         "op_margin": "Operating Margin (OP / Net Sales)",
-        "ns": "Net Sales (€ M)",
+        "ns": "Net Sales (€ M)",
         "nace2": "Sector (NACE2)",
     },
 )
@@ -161,7 +157,7 @@ fig_trend = px.line(
     x="year",
     y=["rd", "ns"],
     markers=True,
-    labels={"value": "Amount (€ Million)", "variable": "Metric"},
+    labels={"value": "Amount (€ Million)", "variable": "Metric"},
 )
 st.plotly_chart(fig_trend, use_container_width=True)
 
@@ -176,8 +172,8 @@ with st.expander("Show filtered data"):
 def convert_df(_df):
     return _df.to_csv(index=False).encode("utf-8")
 
-download_btn = st.download_button(
-    "📥 Download filtered CSV",
+st.download_button(
+    "📅 Download filtered CSV",
     convert_df(filtered),
     file_name="filtered_rd_dataset.csv",
     mime="text/csv",
