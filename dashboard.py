@@ -241,112 +241,129 @@ with tab_sector:
     else:
         st.subheader(f"Sector Analysis for {sel_year}")
 
-        # --- Aggregation ---
-        # Build the aggregation dictionary conditionally based on available columns
+        # --- Aggregation (Assume sector_grouped is calculated as before) ---
         agg_dict = {'company_count': ('company_name', 'count')}
         if "rd" in df.columns: agg_dict['total_rd'] = ('rd', 'sum')
         if "ns" in df.columns: agg_dict['total_ns'] = ('ns', 'sum')
-        # Add median calculations only if the base columns exist
         if "rd_intensity" in df.columns: agg_dict['median_rd_intensity'] = ('rd_intensity', 'median')
         if "op_margin" in df.columns: agg_dict['median_op_margin'] = ('op_margin', 'median')
         if "ip5_total" in df.columns: agg_dict['total_ip5'] = ('ip5_total', 'sum')
 
-        if len(agg_dict) > 1: # Proceed only if there's something to aggregate besides count
-            # Perform aggregation, keeping groups even if they only have NaN for some metrics
-            with warnings.catch_warnings(): # Suppress the specific warning during aggregation
+        if len(agg_dict) > 1:
+            with warnings.catch_warnings():
                  warnings.filterwarnings('ignore', r'Mean of empty slice', category=RuntimeWarning)
                  sector_grouped = df.groupby('nace2', dropna=False).agg(**agg_dict).reset_index()
 
-            # Calculate weighted average R&D Intensity if possible
             if 'total_rd' in sector_grouped.columns and 'total_ns' in sector_grouped.columns:
                  sector_grouped['avg_rd_intensity'] = np.where(
                      sector_grouped['total_ns'] != 0,
-                     sector_grouped['total_rd'] / sector_grouped['total_ns'],
-                     np.nan
+                     sector_grouped['total_rd'] / sector_grouped['total_ns'], np.nan
                  ).astype(float)
                  sector_grouped['avg_rd_intensity'] = sector_grouped['avg_rd_intensity'].replace([np.inf, -np.inf], np.nan)
-            else:
-                 sector_grouped['avg_rd_intensity'] = np.nan
+            else: sector_grouped['avg_rd_intensity'] = np.nan
 
             # --- Plotting and Table ---
             if not sector_grouped.empty:
                 col1, col2 = st.columns(2)
-                plot_height = 500
+                plot_height = 500 # Adjust height as needed
 
                 # --- Column 1 Plots ---
                 with col1:
-                    # R&D Spend by Sector
+                    # R&D Spend by Sector (Keep as is - usually works well)
                     if 'total_rd' in sector_grouped.columns:
                         st.markdown("**Total R&D Spend by Sector (€ M)**")
-                        # Prepare data for plotting: drop sectors with NaN total_rd, take top 15
                         sector_rd_plot = sector_grouped.dropna(subset=['total_rd']).nlargest(15, 'total_rd')
                         if not sector_rd_plot.empty:
-                            fig_sec_rd = px.bar(sector_rd_plot, x='total_rd', y='nace2', orientation='h',
+                            # Convert nace2 to string for categorical plotting
+                            sector_rd_plot['nace2_str'] = sector_rd_plot['nace2'].astype(str)
+                            fig_sec_rd = px.bar(sector_rd_plot, x='total_rd', y='nace2_str', orientation='h',
                                                 title="Top 15 Sectors by Total R&D Spend",
-                                                labels={'total_rd': 'Total R&D (€ M)', 'nace2': 'Sector (NACE2)'},
-                                                hover_data=['company_count'], height=plot_height)
-                            fig_sec_rd.update_layout(yaxis={'categoryorder':'total ascending'})
+                                                labels={'total_rd': 'Total R&D (€ M)', 'nace2_str': 'Sector (NACE2)'},
+                                                hover_data=['company_count', 'nace2'], height=plot_height, text='total_rd')
+                            fig_sec_rd.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
+                            fig_sec_rd.update_layout(yaxis={'categoryorder':'total ascending'}, uniformtext_minsize=8, uniformtext_mode='hide')
                             st.plotly_chart(fig_sec_rd, use_container_width=True)
-                        else:
-                            st.info("No valid sector R&D data to display for the current filters.")
-                    else:
-                         st.info("R&D data not available for sector plot.")
+                        else: st.info("No valid sector R&D data to display.")
+                    else: st.info("R&D data not available.")
 
-                    # Median R&D Intensity by Sector
+                    # Median R&D Intensity by Sector (REVISED)
                     if 'median_rd_intensity' in sector_grouped.columns:
                         st.markdown("**Median R&D Intensity by Sector**")
-                        # Prepare data: drop sectors with NaN median_rd_intensity, take top 15
                         sector_int_plot = sector_grouped.dropna(subset=['median_rd_intensity']).nlargest(15, 'median_rd_intensity')
                         if not sector_int_plot.empty:
-                            fig_sec_int = px.bar(sector_int_plot, x='median_rd_intensity', y='nace2', orientation='h',
+                            # Convert nace2 to string for categorical plotting
+                            sector_int_plot['nace2_str'] = sector_int_plot['nace2'].astype(str)
+                            fig_sec_int = px.bar(sector_int_plot,
+                                                 x='median_rd_intensity',
+                                                 y='nace2_str', # Use string version for y-axis
+                                                 orientation='h',
                                                  title="Top 15 Sectors by Median R&D Intensity",
-                                                 labels={'median_rd_intensity': 'Median R&D Intensity', 'nace2': 'Sector (NACE2)'},
-                                                 hover_data=['company_count'], height=plot_height)
-                            fig_sec_int.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_tickformat='.1%')
+                                                 labels={'median_rd_intensity': 'Median R&D Intensity', 'nace2_str': 'Sector (NACE2)'},
+                                                 hover_data=['company_count', 'nace2'], # Show original nace2 on hover
+                                                 height=plot_height,
+                                                 text='median_rd_intensity' # Add text label
+                                                 )
+                            # Format the text label as percentage
+                            fig_sec_int.update_traces(texttemplate='%{text:.1%}', textposition='outside')
+                            fig_sec_int.update_layout(
+                                yaxis={'categoryorder':'total ascending', 'type': 'category'}, # Explicitly set category type
+                                xaxis_tickformat='.1%', # Format x-axis as percentage
+                                uniformtext_minsize=8, uniformtext_mode='hide' # Adjust text if bars overlap
+                                )
                             st.plotly_chart(fig_sec_int, use_container_width=True)
-                        else:
-                            st.info("No valid sector R&D Intensity data to display for the current filters.")
-                    else:
-                         st.info("R&D Intensity data not available for sector plot.")
+                        else: st.info("No valid sector R&D Intensity data to display.")
+                    else: st.info("R&D Intensity data not available.")
 
                 # --- Column 2 Plots ---
                 with col2:
-                    # Net Sales by Sector
+                    # Net Sales by Sector (Keep as is)
                     if 'total_ns' in sector_grouped.columns:
-                        st.markdown("**Total Net Sales by Sector (€ M)**")
-                        # Prepare data: drop sectors with NaN total_ns, take top 15
-                        sector_ns_plot = sector_grouped.dropna(subset=['total_ns']).nlargest(15, 'total_ns')
-                        if not sector_ns_plot.empty:
-                            fig_sec_ns = px.bar(sector_ns_plot, x='total_ns', y='nace2', orientation='h',
-                                                title="Top 15 Sectors by Total Net Sales",
-                                                labels={'total_ns': 'Total Net Sales (€ M)', 'nace2': 'Sector (NACE2)'},
-                                                hover_data=['company_count'], height=plot_height)
-                            fig_sec_ns.update_layout(yaxis={'categoryorder':'total ascending'})
-                            st.plotly_chart(fig_sec_ns, use_container_width=True)
-                        else:
-                             st.info("No valid sector Net Sales data to display for the current filters.")
-                    else:
-                        st.info("Net Sales data not available for sector plot.")
+                         st.markdown("**Total Net Sales by Sector (€ M)**")
+                         sector_ns_plot = sector_grouped.dropna(subset=['total_ns']).nlargest(15, 'total_ns')
+                         if not sector_ns_plot.empty:
+                             # Convert nace2 to string for categorical plotting
+                             sector_ns_plot['nace2_str'] = sector_ns_plot['nace2'].astype(str)
+                             fig_sec_ns = px.bar(sector_ns_plot, x='total_ns', y='nace2_str', orientation='h',
+                                                 title="Top 15 Sectors by Total Net Sales",
+                                                 labels={'total_ns': 'Total Net Sales (€ M)', 'nace2_str': 'Sector (NACE2)'},
+                                                 hover_data=['company_count', 'nace2'], height=plot_height, text='total_ns')
+                             fig_sec_ns.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
+                             fig_sec_ns.update_layout(yaxis={'categoryorder':'total ascending'}, uniformtext_minsize=8, uniformtext_mode='hide')
+                             st.plotly_chart(fig_sec_ns, use_container_width=True)
+                         else: st.info("No valid sector Net Sales data to display.")
+                    else: st.info("Net Sales data not available.")
 
-                    # Median Operating Margin by Sector
+                    # Median Operating Margin by Sector (REVISED)
                     if 'median_op_margin' in sector_grouped.columns:
                         st.markdown("**Median Operating Margin by Sector**")
-                        # Prepare data: drop sectors with NaN median_op_margin, take top 15
                         sector_mar_plot = sector_grouped.dropna(subset=['median_op_margin']).nlargest(15, 'median_op_margin')
                         if not sector_mar_plot.empty:
-                            fig_sec_mar = px.bar(sector_mar_plot, x='median_op_margin', y='nace2', orientation='h',
+                            # Convert nace2 to string for categorical plotting
+                            sector_mar_plot['nace2_str'] = sector_mar_plot['nace2'].astype(str)
+                            fig_sec_mar = px.bar(sector_mar_plot,
+                                                 x='median_op_margin',
+                                                 y='nace2_str', # Use string version
+                                                 orientation='h',
                                                  title="Top 15 Sectors by Median Operating Margin",
-                                                 labels={'median_op_margin': 'Median Operating Margin', 'nace2': 'Sector (NACE2)'},
-                                                 hover_data=['company_count'], height=plot_height)
-                            fig_sec_mar.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_tickformat='.1%')
+                                                 labels={'median_op_margin': 'Median Operating Margin', 'nace2_str': 'Sector (NACE2)'},
+                                                 hover_data=['company_count', 'nace2'],
+                                                 height=plot_height,
+                                                 text='median_op_margin' # Add text label
+                                                 )
+                            # Format the text label as percentage
+                            fig_sec_mar.update_traces(texttemplate='%{text:.1%}', textposition='outside')
+                            fig_sec_mar.update_layout(
+                                yaxis={'categoryorder':'total ascending', 'type': 'category'}, # Explicitly set category type
+                                xaxis_tickformat='.1%', # Format x-axis as percentage
+                                uniformtext_minsize=8, uniformtext_mode='hide'
+                                )
                             st.plotly_chart(fig_sec_mar, use_container_width=True)
-                        else:
-                            st.info("No valid sector Operating Margin data to display for the current filters.")
-                    else:
-                         st.info("Operating Margin data not available for sector plot.")
+                        else: st.info("No valid sector Operating Margin data to display.")
+                    else: st.info("Operating Margin data not available.")
 
                 # --- Data Table ---
                 st.subheader("Sector Data Table")
+                # ... (Dataframe display code remains the same) ...
                 # Check if there's any meaningful data to display beyond just sector code and count
                 meaningful_cols = [col for col in sector_grouped.columns if col not in ['nace2', 'company_count']]
                 if sector_grouped[meaningful_cols].notna().any(axis=None): # Check if *any* non-NaN value exists in data columns
