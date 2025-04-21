@@ -232,23 +232,145 @@ with tab_overview:
                                           .format("{:,.0f}", subset=pd.IndexSlice[:, ['rd', 'ns', 'op', 'emp', 'ip5_total', 'tm_total']], na_rep='N/A'))
 
 # --- Tab 2: Sector Deep Dive ---
-# (Keep Sector Dive as is for now, focus was on other tabs)
 with tab_sector:
-    # ... (Existing code for sector tab - ensure it handles potential missing columns gracefully) ...
-     if df.empty:
+    if df.empty:
         st.info("No data to display for the selected filters in the Sector Deep Dive tab.")
-     elif 'nace2' not in df.columns:
+    elif 'nace2' not in df.columns:
         st.warning("Sector analysis requires the 'nace2' column, which is missing.")
-     else:
+    else:
         st.subheader(f"Sector Analysis for {sel_year}")
-        # ... rest of the sector code from previous version ...
-        # Ensure formatting in the final dataframe display uses na_rep='N/A'
-        # Example for the dataframe display:
-        # st.dataframe(
-        #     sector_grouped.sort_values(by='total_rd' if 'total_rd' in sector_grouped else 'company_count', ascending=False)
-        #     .reset_index(drop=True)
-        #     .style.format(format_dict, na_rep='N/A')
-        # )
+
+        # --- Aggregation ---
+        # Build the aggregation dictionary conditionally based on available columns
+        agg_dict = {'company_count': ('company_name', 'count')}
+        if "rd" in df.columns: agg_dict['total_rd'] = ('rd', 'sum')
+        if "ns" in df.columns: agg_dict['total_ns'] = ('ns', 'sum')
+        # Add median calculations only if the base columns exist
+        if "rd_intensity" in df.columns: agg_dict['median_rd_intensity'] = ('rd_intensity', 'median')
+        if "op_margin" in df.columns: agg_dict['median_op_margin'] = ('op_margin', 'median')
+        if "ip5_total" in df.columns: agg_dict['total_ip5'] = ('ip5_total', 'sum')
+
+        if len(agg_dict) > 1: # Proceed only if there's something to aggregate besides count
+            # Perform aggregation, keeping groups even if they only have NaN for some metrics
+            with warnings.catch_warnings(): # Suppress the specific warning during aggregation
+                 warnings.filterwarnings('ignore', r'Mean of empty slice', category=RuntimeWarning)
+                 sector_grouped = df.groupby('nace2', dropna=False).agg(**agg_dict).reset_index()
+
+            # Calculate weighted average R&D Intensity if possible
+            if 'total_rd' in sector_grouped.columns and 'total_ns' in sector_grouped.columns:
+                 sector_grouped['avg_rd_intensity'] = np.where(
+                     sector_grouped['total_ns'] != 0,
+                     sector_grouped['total_rd'] / sector_grouped['total_ns'],
+                     np.nan
+                 ).astype(float)
+                 sector_grouped['avg_rd_intensity'] = sector_grouped['avg_rd_intensity'].replace([np.inf, -np.inf], np.nan)
+            else:
+                 sector_grouped['avg_rd_intensity'] = np.nan
+
+            # --- Plotting and Table ---
+            if not sector_grouped.empty:
+                col1, col2 = st.columns(2)
+                plot_height = 500
+
+                # --- Column 1 Plots ---
+                with col1:
+                    # R&D Spend by Sector
+                    if 'total_rd' in sector_grouped.columns:
+                        st.markdown("**Total R&D Spend by Sector (€ M)**")
+                        # Prepare data for plotting: drop sectors with NaN total_rd, take top 15
+                        sector_rd_plot = sector_grouped.dropna(subset=['total_rd']).nlargest(15, 'total_rd')
+                        if not sector_rd_plot.empty:
+                            fig_sec_rd = px.bar(sector_rd_plot, x='total_rd', y='nace2', orientation='h',
+                                                title="Top 15 Sectors by Total R&D Spend",
+                                                labels={'total_rd': 'Total R&D (€ M)', 'nace2': 'Sector (NACE2)'},
+                                                hover_data=['company_count'], height=plot_height)
+                            fig_sec_rd.update_layout(yaxis={'categoryorder':'total ascending'})
+                            st.plotly_chart(fig_sec_rd, use_container_width=True)
+                        else:
+                            st.info("No valid sector R&D data to display for the current filters.")
+                    else:
+                         st.info("R&D data not available for sector plot.")
+
+                    # Median R&D Intensity by Sector
+                    if 'median_rd_intensity' in sector_grouped.columns:
+                        st.markdown("**Median R&D Intensity by Sector**")
+                        # Prepare data: drop sectors with NaN median_rd_intensity, take top 15
+                        sector_int_plot = sector_grouped.dropna(subset=['median_rd_intensity']).nlargest(15, 'median_rd_intensity')
+                        if not sector_int_plot.empty:
+                            fig_sec_int = px.bar(sector_int_plot, x='median_rd_intensity', y='nace2', orientation='h',
+                                                 title="Top 15 Sectors by Median R&D Intensity",
+                                                 labels={'median_rd_intensity': 'Median R&D Intensity', 'nace2': 'Sector (NACE2)'},
+                                                 hover_data=['company_count'], height=plot_height)
+                            fig_sec_int.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_tickformat='.1%')
+                            st.plotly_chart(fig_sec_int, use_container_width=True)
+                        else:
+                            st.info("No valid sector R&D Intensity data to display for the current filters.")
+                    else:
+                         st.info("R&D Intensity data not available for sector plot.")
+
+                # --- Column 2 Plots ---
+                with col2:
+                    # Net Sales by Sector
+                    if 'total_ns' in sector_grouped.columns:
+                        st.markdown("**Total Net Sales by Sector (€ M)**")
+                        # Prepare data: drop sectors with NaN total_ns, take top 15
+                        sector_ns_plot = sector_grouped.dropna(subset=['total_ns']).nlargest(15, 'total_ns')
+                        if not sector_ns_plot.empty:
+                            fig_sec_ns = px.bar(sector_ns_plot, x='total_ns', y='nace2', orientation='h',
+                                                title="Top 15 Sectors by Total Net Sales",
+                                                labels={'total_ns': 'Total Net Sales (€ M)', 'nace2': 'Sector (NACE2)'},
+                                                hover_data=['company_count'], height=plot_height)
+                            fig_sec_ns.update_layout(yaxis={'categoryorder':'total ascending'})
+                            st.plotly_chart(fig_sec_ns, use_container_width=True)
+                        else:
+                             st.info("No valid sector Net Sales data to display for the current filters.")
+                    else:
+                        st.info("Net Sales data not available for sector plot.")
+
+                    # Median Operating Margin by Sector
+                    if 'median_op_margin' in sector_grouped.columns:
+                        st.markdown("**Median Operating Margin by Sector**")
+                        # Prepare data: drop sectors with NaN median_op_margin, take top 15
+                        sector_mar_plot = sector_grouped.dropna(subset=['median_op_margin']).nlargest(15, 'median_op_margin')
+                        if not sector_mar_plot.empty:
+                            fig_sec_mar = px.bar(sector_mar_plot, x='median_op_margin', y='nace2', orientation='h',
+                                                 title="Top 15 Sectors by Median Operating Margin",
+                                                 labels={'median_op_margin': 'Median Operating Margin', 'nace2': 'Sector (NACE2)'},
+                                                 hover_data=['company_count'], height=plot_height)
+                            fig_sec_mar.update_layout(yaxis={'categoryorder':'total ascending'}, xaxis_tickformat='.1%')
+                            st.plotly_chart(fig_sec_mar, use_container_width=True)
+                        else:
+                            st.info("No valid sector Operating Margin data to display for the current filters.")
+                    else:
+                         st.info("Operating Margin data not available for sector plot.")
+
+                # --- Data Table ---
+                st.subheader("Sector Data Table")
+                # Check if there's any meaningful data to display beyond just sector code and count
+                meaningful_cols = [col for col in sector_grouped.columns if col not in ['nace2', 'company_count']]
+                if sector_grouped[meaningful_cols].notna().any(axis=None): # Check if *any* non-NaN value exists in data columns
+                    format_dict = {}
+                    if 'total_rd' in sector_grouped: format_dict['total_rd'] = '{:,.0f}'
+                    if 'total_ns' in sector_grouped: format_dict['total_ns'] = '{:,.0f}'
+                    if 'median_rd_intensity' in sector_grouped: format_dict['median_rd_intensity'] = '{:.2%}'
+                    if 'avg_rd_intensity' in sector_grouped: format_dict['avg_rd_intensity'] = '{:.2%}'
+                    if 'median_op_margin' in sector_grouped: format_dict['median_op_margin'] = '{:.2%}'
+                    if 'total_ip5' in sector_grouped: format_dict['total_ip5'] = '{:,.0f}'
+
+                    # Sort by total_rd if available, otherwise by count
+                    sort_col = 'total_rd' if 'total_rd' in sector_grouped.columns else 'company_count'
+                    st.dataframe(
+                        sector_grouped.sort_values(by=sort_col, ascending=False)
+                        .reset_index(drop=True)
+                        .style.format(format_dict, na_rep='N/A') # Ensure N/A display
+                    )
+                else:
+                    st.info("No aggregated sector data (like totals or medians) available to display in the table for the current filters.")
+
+            else: # Handle if sector_grouped was empty initially (e.g., df was empty but had nace2 column)
+                st.info("No sector data available to aggregate for the current selection.")
+        else: # Handle if agg_dict only had 'company_count'
+            st.info("Insufficient data columns available for meaningful sector aggregation (need RD, NS, etc.).")
 
 
 # --- Tab 3: IP vs Financials ---
