@@ -235,6 +235,62 @@ with tab_overview:
         st.subheader("Sample Data for Selected Filters")
         st.dataframe(df.head(10).style.format("{:,.2f}", subset=pd.IndexSlice[:, ['rd_intensity', 'op_margin']], na_rep='N/A')
                                           .format("{:,.0f}", subset=pd.IndexSlice[:, ['rd', 'ns', 'op', 'emp', 'ip5_total', 'tm_total']], na_rep='N/A'))
+# --- NEW: Top 10 Regression Plot ---
+        st.subheader("Relationship for Top 10 R&D Investors")
+        st.markdown("*(Based on companies with highest R&D Spend within current filters)*")
+
+        # Define variables for the plot
+        x_var = "rd_intensity"
+        y_var = "op_margin"
+        rank_col = "rd" # Rank by R&D Spend
+
+        # Check if necessary columns exist
+        plot_cols = [x_var, y_var, rank_col, 'company_name']
+        if not all(col in df.columns for col in plot_cols):
+             missing_plot_cols = [c for c in plot_cols if c not in df.columns]
+             st.warning(f"Cannot create Top 10 regression plot. Missing columns: {', '.join(missing_plot_cols)}")
+        else:
+            # Get top 10 based on ranking column
+            df_top10 = df.nlargest(10, rank_col).copy()
+
+            # Prepare data for plotting (drop NaNs for x and y vars)
+            df_plot = df_top10[[x_var, y_var, 'company_name']].dropna()
+
+            # Need at least 2 points to plot a line
+            if len(df_plot) < 2:
+                st.info("Not enough valid data points among the Top 10 R&D investors to create a regression plot.")
+            else:
+                st.markdown(f"**{y_var.replace('_', ' ').title()} vs. {x_var.replace('_', ' ').title()}**")
+
+                # Create scatter plot with OLS trendline
+                fig_top10_reg = px.scatter(
+                    df_plot,
+                    x=x_var,
+                    y=y_var,
+                    title=f"{y_var.replace('_', ' ').title()} vs. {x_var.replace('_', ' ').title()} for Top 10 by R&D Spend",
+                    trendline="ols",  # Add Ordinary Least Squares regression line
+                    trendline_scope="overall", # Fit line to all points shown
+                    trendline_color_override="red", # Make line stand out
+                    labels={
+                        x_var: x_var.replace('_', ' ').title(),
+                        y_var: y_var.replace('_', ' ').title()
+                    },
+                    hover_name="company_name",
+                    text="company_name" # Optionally label points directly
+                )
+
+                # Customize layout
+                fig_top10_reg.update_traces(textposition='top center', textfont_size=10) # Adjust text label appearance
+                fig_top10_reg.update_layout(
+                     xaxis_tickformat='.1%', # Format x-axis if it's a percentage
+                     yaxis_tickformat='.1%', # Format y-axis if it's a percentage
+                     # Consider setting axis ranges if needed, similar to the IP vs Fin tab
+                     # yaxis_range=[-0.5, 0.5], # Example range for op_margin
+                     # xaxis_range=[0, 1],     # Example range for rd_intensity
+                 )
+
+                st.plotly_chart(fig_top10_reg, use_container_width=True)
+                st.caption("Shows the relationship and linear trendline for the 10 companies with the highest R&D spending within the current filter selection.")
 
 # --- Tab 2: Sector Deep Dive ---
 with tab_sector:
