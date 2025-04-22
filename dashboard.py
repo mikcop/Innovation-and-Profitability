@@ -8,12 +8,26 @@ import statsmodels.formula.api as smf
 
 # --- Page Config ---
 st.set_page_config(
-    page_title="Corporate R&D Investors Dashboard",
+    page_title="Corporate R&D and Profitability Dashboard", # Slightly adjusted title
     layout="wide",
     initial_sidebar_state="expanded"
 )
-# Set Plotly template globally
 px.defaults.template = "plotly_white"
+
+# --- NACE Rev. 2 High-Level Descriptions ---
+# Define this dictionary near the top
+NACE_GROUP_DESCRIPTIONS = [
+    {"Sector Group": "Manufacturing", "Description": "Food, chemicals, machinery, electronics, etc.", "Sample NACE 2 Codes": "10xx–33xx"},
+    {"Sector Group": "Construction", "Description": "Buildings & infrastructure", "Sample NACE 2 Codes": "41xx–43xx"},
+    {"Sector Group": "Trade & Transport", "Description": "Wholesale, retail, logistics", "Sample NACE 2 Codes": "45xx–52xx"},
+    {"Sector Group": "ICT & Digital", "Description": "Software, IT, telecoms", "Sample NACE 2 Codes": "58xx–63xx"},
+    {"Sector Group": "Finance & Insurance", "Description": "Banking, insurance, investments", "Sample NACE 2 Codes": "64xx–66xx"},
+    {"Sector Group": "Professional Services", "Description": "Engineering, consulting, marketing, R&D", "Sample NACE 2 Codes": "70xx–74xx"},
+    {"Sector Group": "Education & Health", "Description": "Schools, training, medical", "Sample NACE 2 Codes": "85xx–86xx"},
+    {"Sector Group": "Energy & Utilities", "Description": "Power, water, gas", "Sample NACE 2 Codes": "35xx–36xx"},
+    # Add other relevant high-level groups if needed
+]
+NACE_LEGEND_DF = pd.DataFrame(NACE_GROUP_DESCRIPTIONS)
 
 # --- Data Loading ---
 @st.cache_data(show_spinner="Loading data...")
