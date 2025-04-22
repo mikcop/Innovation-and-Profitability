@@ -48,7 +48,7 @@ def load_data(filepath="panel_2015_2018.csv"):
         "patCN", "patEP", "patJP", "patKR", "patUS",
         "TMnEU", "TMnUS"
     ]
-    numeric_cols_present = [c for c in numeric_cols_expected if c in df.columns]
+    numeric_cols_present = [c for c in numeric_cols_expected if c in df.columns] 
 
     if numeric_cols_present:
         df[numeric_cols_present] = df[numeric_cols_present].apply(pd.to_numeric, errors="coerce")
