@@ -4,6 +4,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
+import statsmodels.formula.api as smf 
 
 # --- Page Config ---
 st.set_page_config(
@@ -89,6 +90,7 @@ df_filtered_current_year = raw_df.loc[mask].copy()
 # --- Calculated Metrics ---
 if 'company_name' not in df_filtered_current_year.columns:
      df_filtered_current_year['company_name'] = 'Company ' + df_filtered_current_year.index.astype(str)
+     df = calculate_metrics(df_filtered_current_year)
 
 def calculate_metrics(df_in):
     """Calculates derived metrics."""
@@ -151,9 +153,11 @@ if kpi_tm_total > 0:
 st.divider()
 
 # --- Tabs for Detailed Analysis ---
-tab_overview, tab_sector, tab_ip, tab_growth, tab_report = st.tabs([
-    "📊 Overview", "🏭 Sector Deep Dive", "💡 IP vs Financials", "📈 Growth Analysis (vs 2015)", " JRC/OECD Report Insights"
+tab_overview, tab_sector, tab_ip, tab_growth, tab_framework, tab_regression, tab_report = st.tabs([
+    "📊 Overview", "🏭 Sector Deep Dive", "💡 IP vs Financials", "📈 Growth Analysis",
+    "📝 Analysis Framework", "📉 Regression Analysis", "📚 JRC/OECD Report (2017)" # Added Regression Tab
 ])
+
 
 # --- Tab 1: Overview ---
 with tab_overview:
@@ -631,3 +635,82 @@ with tab_report:
         st.plotly_chart(pie_chart_portfolio, use_container_width=True)
 
     st.info("Reference: Daiko T., Dernis H., Dosso M., Gkotsis P., Squicciarini M., Vezzani A. (2017). *World Corporate Top R&D Investors: Industrial Property Strategies in the Digital Economy*. A JRC and OECD common report. Luxembourg: Publications Office of the European Union. EUR 28656 EN.")
+
+# --- NEW Tab 6: Regression Analysis ---
+with tab_regression:
+    st.header("📉 Regression Analysis (Illustrative)")
+    st.markdown(f"""
+    This section presents simple Ordinary Least Squares (OLS) regression results
+    based on the **cross-sectional data filtered for the selected year ({sel_year})**.
+    These models explore potential correlations suggested by the hypotheses in the 'Analysis Framework' tab.
+
+    **Important Caveats:**
+    *   **Correlation, Not Causation:** These models show associations, *not* causal relationships.
+    *   **Cross-Sectional:** Analysis is only for the selected year, not panel data which would be needed for more robust analysis of lags and fixed effects.
+    *   **Omitted Variables:** Many factors influencing profitability are not included (e.g., market structure, firm strategy, macroeconomic conditions).
+    *   **Endogeneity:** R&D/IP might influence profits, but profits might also influence R&D/IP investment (simultaneity).
+    *   **Illustrative Only:** Results are intended for exploratory purposes within this dashboard's context.
+    """)
+    st.info("Models are run only if sufficient data (non-missing values for all variables in the model) exists after applying filters.")
+
+    if df.empty:
+        st.warning("No data available for regression after filtering.")
+    else:
+        # --- Define Models ---
+        models_to_run = {
+            "Model 1: Profit Margin vs. R&D Intensity": {
+                "formula": "op_margin ~ rd_intensity",
+                "required_cols": ["op_margin", "rd_intensity"]
+            },
+            "Model 2: Profit Margin vs. Patent Count": {
+                "formula": "op_margin ~ ip5_total",
+                "required_cols": ["op_margin", "ip5_total"]
+            },
+            "Model 3: Profit Margin vs. R&D Intensity & Patents": {
+                "formula": "op_margin ~ rd_intensity + ip5_total",
+                "required_cols": ["op_margin", "rd_intensity", "ip5_total"]
+            },
+            "Model 4: Model 3 + Size Control (Log(Employees))": {
+                "formula": "op_margin ~ rd_intensity + ip5_total + np.log1p(emp)", # log1p handles potential zeros in emp
+                "required_cols": ["op_margin", "rd_intensity", "ip5_total", "emp"]
+            }
+        }
+
+        results_html = {} # Store results
+
+        for model_name, model_info in models_to_run.items():
+            formula = model_info["formula"]
+            required = model_info["required_cols"]
+
+            # Check if required columns exist
+            if not all(col in df.columns for col in required):
+                results_html[model_name] = f"<p><i>Skipped: Missing required columns ({', '.join([c for c in required if c not in df.columns])}).</i></p>"
+                continue
+
+            # Prepare data for this specific model (drop rows with NaNs in needed columns)
+            df_model = df[required].dropna()
+
+            # Check if enough data remains (need more observations than predictors)
+            num_predictors = formula.count('+') + 1 # Count terms on RHS
+            if len(df_model) <= num_predictors:
+                results_html[model_name] = f"<p><i>Skipped: Insufficient non-missing data ({len(df_model)} observations) for required columns ({', '.join(required)}).</i></p>"
+                continue
+
+            # Run the OLS regression
+            try:
+                with warnings.catch_warnings(): # Suppress potential multicollinearity or other warnings
+                    warnings.simplefilter("ignore")
+                    model = smf.ols(formula=formula, data=df_model).fit()
+                results_html[model_name] = model.summary().as_html() # Get summary table as HTML
+            except Exception as e:
+                results_html[model_name] = f"<p><i>Error running model: {e}</i></p>"
+
+        # --- Display Results ---
+        st.subheader("OLS Regression Results")
+        for model_name, summary_html in results_html.items():
+            st.markdown(f"--- \n #### {model_name}")
+            # Display the formula used
+            if "formula" in models_to_run.get(model_name, {}):
+                 st.code(f"Formula: {models_to_run[model_name]['formula']}", language="python")
+            # Display the results table (or error message)
+            st.markdown(summary_html, unsafe_allow_html=True)
