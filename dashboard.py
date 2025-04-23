@@ -706,6 +706,179 @@ with tab_report:
 
     st.info("Reference: Daiko T., Dernis H., Dosso M., Gkotsis P., Squicciarini M., Vezzani A. (2017). *World Corporate Top R&D Investors: Industrial Property Strategies in the Digital Economy*. A JRC and OECD common report. Luxembourg: Publications Office of the European Union. EUR 28656 EN.")
 
+# --- Tab 5: Analysis Framework ---
+with tab_framework:
+    st.header("📝 Conceptual Analysis Framework")
+    st.markdown("""
+    This dashboard explores the relationship between corporate R&D investment, intellectual property (IP) generation, and financial performance (profitability). The underlying hypotheses, often explored in economic and business literature, are:
+
+    1.  **R&D Investment Drives Innovation:** Higher investment in Research & Development (`rd`, often normalized as `rd_intensity` = R&D/Sales) is expected to lead to the creation of new products, processes, or services (innovation output).
+
+    2.  **Innovation is Protected/Signalled by IP:** Successful innovation outputs are often protected through patents (e.g., `ip5_total` counting applications in major patent offices) and branding established via trademarks (`tm_total`). IP filings can also serve as signals of a firm's innovative capabilities and intentions.
+
+    3.  **Innovation and IP Contribute to Profitability:** Companies that invest effectively in R&D and leverage their IP strategically are hypothesized to achieve better financial outcomes, such as higher operating margins (`op_margin`) or potentially higher sales (`ns`) and growth over time.
+
+    4.  **Sectoral Differences Matter:** The nature and intensity of R&D, the importance of different IP types, and the link to profitability vary significantly across industries (sectors, represented by `nace2`). For example, pharmaceuticals rely heavily on patents, while consumer goods might focus more on trademarks and designs.
+
+    5.  **Control Factors:** Other factors influence these relationships, including:
+        *   **Firm Size:** Larger firms (measured by `emp` or `ns`) may have economies of scale in R&D or market power influencing margins.
+        *   **Country:** The national innovation system, regulatory environment, and market conditions (`ctry_code`) play a role.
+        *   **Time:** Economic cycles and technological shifts (`year`) affect all firms.
+
+    **How the Dashboard Tabs Explore This:**
+
+    *   **📊 Overview:** Shows the landscape - top investors, general distribution of key metrics (`rd`, `ns`, `rd_intensity`, `op_margin`), and a regression plot for the *Top 10* R&D spenders.
+    *   **🏭 Sector Deep Dive:** Allows comparison of average/median behaviors across different `nace2` sectors.
+    *   **💡 IP vs Financials:** Visualizes the correlation between `ip5_total` and financial ratios (`rd_intensity`, `op_margin`), considering firm size (`ns`).
+    *   **📈 Growth Analysis:** Examines how R&D, Sales, etc., have evolved over time for the *same set* of companies.
+    *   **📝 Analysis Framework:** (This Tab) Provides the conceptual background, the *overall* regression plot (all companies), and a heatmap of pairwise variable relationships.
+    *   **📉 Regression Analysis:** Provides simple multivariate statistical models attempting to quantify the relationship between `op_margin` and variables like `rd_intensity`, `ip5_total`, and `emp` within the selected year's data.
+    *   **📚 JRC/OECD Report:** Gives external context from a major study on R&D leaders and IP.
+
+    Use the sidebar filters to narrow the analysis and see how these relationships might differ for specific subsets of firms.
+    """)
+    st.markdown("---") # Add a separator
+
+    # --- Overall Regression Plot (All Filtered Companies) ---
+    st.subheader("Overall Relationship: Operating Margin vs. R&D Intensity")
+    st.markdown(f"*(Based on **all** companies matching filters for {sel_year})*")
+
+    # Define variables for the plot
+    x_var_all = "rd_intensity"
+    y_var_all = "op_margin"
+
+    # Check if necessary columns exist and data is available
+    plot_cols_all = [x_var_all, y_var_all, 'company_name']
+    if df.empty:
+        st.info("No data available for the overall regression plot based on current filters.")
+    elif not all(col in df.columns for col in plot_cols_all):
+         missing_plot_cols_all = [c for c in plot_cols_all if c not in df.columns]
+         st.warning(f"Cannot create overall regression plot. Missing columns: {', '.join(missing_plot_cols_all)}")
+    else:
+        # Prepare data for plotting (drop NaNs for x and y vars)
+        df_plot_all = df[[x_var_all, y_var_all, 'company_name']].dropna()
+
+        # Need at least 2 points to plot a line
+        if len(df_plot_all) < 2:
+            st.info("Not enough valid data points (after removing missing values) to create an overall regression plot.")
+        else:
+            st.markdown(f"**{y_var_all.replace('_', ' ').title()} vs. {x_var_all.replace('_', ' ').title()}**")
+
+            # Create scatter plot with OLS trendline
+            fig_all_reg = px.scatter(
+                df_plot_all,
+                x=x_var_all,
+                y=y_var_all,
+                title=f"{y_var_all.replace('_', ' ').title()} vs. {x_var_all.replace('_', ' ').title()} (All Filtered Companies)",
+                trendline="ols",  # Add Ordinary Least Squares regression line
+                trendline_scope="overall", # Fit line to all points shown
+                trendline_color_override="red", # Make line stand out
+                labels={
+                    x_var_all: x_var_all.replace('_', ' ').title(),
+                    y_var_all: y_var_all.replace('_', ' ').title()
+                },
+                hover_name="company_name" # Hover is better than text labels for many points
+            )
+
+            # Customize layout - perhaps limit axes for clarity if needed
+            y_range_all = [-0.5, 0.5] # Example range for op_margin
+            x_range_all = [0, 1]     # Example range for rd_intensity
+            fig_all_reg.update_layout(
+                 xaxis_tickformat='.1%', # Format x-axis if it's a percentage
+                 yaxis_tickformat='.1%', # Format y-axis if it's a percentage
+                 yaxis_range=y_range_all, # Apply the range for better focus
+                 xaxis_range=x_range_all, # Apply the range for better focus
+             )
+
+            st.plotly_chart(fig_all_reg, use_container_width=True)
+            st.caption(f"Shows the relationship and linear trendline for all companies within the current filter selection (after removing missing values for these two variables). Axes limited to {x_range_all[0]:.0%}-{x_range_all[1]:.0%} intensity and {y_range_all[0]:.0%}-{y_range_all[1]:.0%} margin for clarity.")
+
+    st.markdown("---") # Add another separator
+
+    # --- R-squared Heatmap ---
+    st.subheader("Heatmap of Pairwise R-squared Values")
+    st.markdown("""
+    This heatmap shows the R-squared (R²) value from simple linear regressions run between pairs of key variables for the filtered data.
+    R² indicates the proportion of the variance in the dependent variable (y-axis) that is predictable from the independent variable (x-axis) in a linear model.
+    Values range from 0 (no linear relationship) to 1 (perfect linear relationship).
+    *Note: High R² indicates linear correlation, **not** causation.*
+    """)
+
+    if df.empty:
+        st.info("No data available for the R-squared heatmap based on current filters.")
+    else:
+        # Define variables for the heatmap
+        heatmap_candidates = ['rd', 'ns', 'op', 'emp', 'rd_intensity', 'op_margin', 'ip5_total', 'tm_total']
+        # Filter to only include columns present in the dataframe
+        heatmap_vars = [var for var in heatmap_candidates if var in df.columns]
+
+        if len(heatmap_vars) < 2:
+            st.warning("Need at least two numeric variables present in the data to create a heatmap.")
+        else:
+            # Calculate pairwise R-squared
+            r2_matrix = pd.DataFrame(np.nan, index=heatmap_vars, columns=heatmap_vars)
+            valid_r2_found = False
+
+            for var1 in heatmap_vars:
+                for var2 in heatmap_vars:
+                    if var1 == var2:
+                        r2_matrix.loc[var1, var2] = 1.0
+                        continue
+                    if pd.notna(r2_matrix.loc[var1, var2]): # Already calculated (symmetry)
+                         continue
+
+                    # Prepare data for this pair
+                    df_pair = df[[var1, var2]].dropna()
+
+                    if len(df_pair) >= 2:
+                        try:
+                            with warnings.catch_warnings(): # Suppress potential statsmodels warnings
+                                warnings.simplefilter("ignore")
+                                # Run regression: var2 ~ var1
+                                model = smf.ols(f'Q("{var2}") ~ Q("{var1}")', data=df_pair).fit() # Use Q() for safety with special chars
+                            r_squared = model.rsquared
+                            r2_matrix.loc[var1, var2] = r_squared
+                            r2_matrix.loc[var2, var1] = r_squared # R^2 is symmetric for simple linear regression
+                            valid_r2_found = True
+                        except Exception: # Catch potential errors during regression
+                             r2_matrix.loc[var1, var2] = np.nan
+                             r2_matrix.loc[var2, var1] = np.nan
+                    else:
+                        r2_matrix.loc[var1, var2] = np.nan
+                        r2_matrix.loc[var2, var1] = np.nan # Ensure symmetry even for NaN
+
+            if not valid_r2_found:
+                st.info("Could not calculate any valid R-squared values for the selected variables and filters (likely due to insufficient overlapping data).")
+            else:
+                # Create the heatmap plot using Plotly Graph Objects for better control
+                fig_heatmap = go.Figure(data=go.Heatmap(
+                        z=r2_matrix.values,
+                        x=r2_matrix.columns,
+                        y=r2_matrix.index,
+                        colorscale='Blues', # Choose a colorscale
+                        text=r2_matrix.values, # Add R^2 values as text
+                        texttemplate="%{text:.2f}", # Format text to 2 decimal places
+                        textfont={"size":10},
+                        hoverongaps = False, # Don't hover over NaN gaps
+                        zmin=0, zmax=1 # R^2 is between 0 and 1
+                        ))
+
+                fig_heatmap.update_layout(
+                    title='Pairwise R-squared Heatmap',
+                    xaxis_title='Independent Variable (X)',
+                    yaxis_title='Dependent Variable (Y)',
+                    xaxis_tickangle=-45, # Angle labels if they overlap
+                    yaxis_autorange='reversed' # Often standard for correlation matrices
+                )
+                st.plotly_chart(fig_heatmap, use_container_width=True)
+
+    st.markdown("---") # Add another separator
+
+    # --- NACE Legend ---
+    st.subheader("NACE Sector Group Legend (Illustrative)")
+    st.dataframe(NACE_LEGEND_DF, hide_index=True) # Display the legend here for easy reference
+
+
 # --- NEW Tab 6: Regression Analysis ---
 with tab_regression:
     st.header("📉 Regression Analysis (Illustrative)")
