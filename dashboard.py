@@ -104,7 +104,6 @@ df_filtered_current_year = raw_df.loc[mask].copy()
 # --- Calculated Metrics ---
 if 'company_name' not in df_filtered_current_year.columns:
      df_filtered_current_year['company_name'] = 'Company ' + df_filtered_current_year.index.astype(str)
-     df = calculate_metrics(df_filtered_current_year)
 
 def calculate_metrics(df_in):
     """Calculates derived metrics."""
