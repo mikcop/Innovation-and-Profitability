@@ -128,6 +128,108 @@ def calculate_metrics(df_in):
 
     return df_calc
 
+# --- Helper Functions for Tabs ---
+def prepare_ip_vs_financials_data(df_in, ip_col='ip5_total'):
+    """Return DataFrame ready for IP vs. Financials plots."""
+    if df_in is None or df_in.empty:
+        return pd.DataFrame()
+
+    req_cols = {ip_col, 'rd_intensity', 'op_margin', 'ns'}
+    missing = req_cols - set(df_in.columns)
+    if missing:
+        return pd.DataFrame()
+
+    scatter_df = df_in.dropna(subset=list(req_cols)).copy()
+    scatter_df['ns_size'] = scatter_df['ns'].fillna(0).clip(lower=0)
+    scatter_df = scatter_df.dropna(subset=[ip_col, 'rd_intensity', 'op_margin', 'ns_size'])
+    return scatter_df
+
+
+def render_ip_vs_financials_tab(tab, df_in, sel_year, ip_col='ip5_total'):
+    """Render the IP vs. Financials plots within the provided tab."""
+    with tab:
+        st.subheader(f"IP Activity vs. Financial Performance ({sel_year})")
+
+        required_cols = {ip_col, 'company_name', 'nace2', 'rd_intensity', 'op_margin', 'ns', 'rd'}
+        if df_in.empty:
+            st.info("No data to display for the selected filters in the IP vs Financials tab.")
+            return
+        if not required_cols.issubset(df_in.columns):
+            missing = [c for c in required_cols if c not in df_in.columns]
+            st.warning(
+                "Cannot generate IP vs. Financials analysis. Missing required columns: "
+                + ", ".join(missing)
+            )
+            return
+
+        scatter_df = prepare_ip_vs_financials_data(df_in, ip_col)
+        if scatter_df.empty:
+            st.info("Insufficient valid data for IP vs. Financial scatter plots after filtering.")
+            return
+
+        col1, col2 = st.columns(2)
+        hover_base = ['rd', 'ns', 'op_margin', 'rd_intensity', ip_col]
+        hover_data_subset = [c for c in hover_base if c in scatter_df.columns]
+
+        max_ip = scatter_df[ip_col].max()
+        median_ip = scatter_df[ip_col].median()
+        use_log_x = (
+            median_ip > 0
+            and pd.notna(max_ip)
+            and pd.notna(median_ip)
+            and max_ip > 10 * median_ip
+        )
+
+        with col1:
+            st.markdown("**R&D Intensity vs. IP5 Patent Applications**")
+            y_range = [0, 1]
+            fig = px.scatter(
+                scatter_df,
+                x=ip_col,
+                y='rd_intensity',
+                size='ns_size',
+                color='nace2',
+                hover_name='company_name',
+                hover_data=hover_data_subset,
+                log_x=use_log_x,
+                title=f"R&D Intensity (Focus: {y_range[0]:.0%} to {y_range[1]:.0%}) vs. IP5 Patents",
+                labels={
+                    ip_col: f"IP5 Patent Applications {'(log scale)' if use_log_x else ''}",
+                    'rd_intensity': 'R&D Intensity',
+                    'nace2': 'Sector',
+                },
+            )
+            fig.update_layout(yaxis_range=y_range, yaxis_tickformat='.1%')
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(
+                f"Y-axis limited to {y_range[0]:.0%} - {y_range[1]:.0%} R&D Intensity. Bubble size = Net Sales."
+            )
+
+        with col2:
+            st.markdown("**Operating Margin vs. IP5 Patent Applications**")
+            y_range = [-0.5, 0.5]
+            fig = px.scatter(
+                scatter_df,
+                x=ip_col,
+                y='op_margin',
+                size='ns_size',
+                color='nace2',
+                hover_name='company_name',
+                hover_data=hover_data_subset,
+                log_x=use_log_x,
+                title=f"Operating Margin (Focus: {y_range[0]:.0%} to {y_range[1]:.0%}) vs. IP5 Patents",
+                labels={
+                    ip_col: f"IP5 Patent Applications {'(log scale)' if use_log_x else ''}",
+                    'op_margin': 'Operating Margin',
+                    'nace2': 'Sector',
+                },
+            )
+            fig.update_layout(yaxis_range=y_range, yaxis_tickformat='.1%')
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption(
+                f"Y-axis limited to {y_range[0]:.0%} - {y_range[1]:.0%} Operating Margin. Bubble size = Net Sales."
+            )
+
 df = calculate_metrics(df_filtered_current_year)
 
 # --- Aggregate KPIs ---
@@ -465,76 +567,7 @@ with tab_sector:
 
 
 # --- Tab 3: IP vs Financials ---
-with tab_ip:
-    st.subheader(f"IP Activity vs. Financial Performance ({sel_year})")
-    ip_col = 'ip5_total'
-    fin_cols = ['rd_intensity', 'op_margin', 'ns', 'rd']
-    required_cols = [ip_col] + fin_cols + ['company_name', 'nace2']
-
-    if df.empty:
-         st.info("No data to display for the selected filters in the IP vs Financials tab.")
-    elif not all(col in df.columns for col in required_cols):
-         missing_required = [col for col in required_cols if col not in df.columns]
-         st.warning(f"Cannot generate IP vs. Financials analysis. Missing required columns: {', '.join(missing_required)}")
-    else:
-        scatter_df = df.dropna(subset=[ip_col, 'rd_intensity', 'op_margin', 'ns']).copy()
-        scatter_df['ns_size'] = scatter_df['ns'].fillna(0).clip(lower=0) # Ensure non-negative size
-
-        # Filter out rows where essential plot columns are still NaN after initial dropna
-        scatter_df = scatter_df.dropna(subset=[ip_col, 'rd_intensity', 'op_margin', 'ns_size'])
-
-        if not scatter_df.empty:
-            col1, col2 = st.columns(2)
-            hover_list = ['rd', 'ns', 'op_margin', 'rd_intensity', ip_col]
-            hover_data_subset = [c for c in hover_list if c in scatter_df.columns]
-
-            # --- R&D Intensity vs IP5 ---
-            with col1:
-                st.markdown("**R&D Intensity vs. IP5 Patent Applications**")
-                max_ip = scatter_df[ip_col].max()
-                median_ip = scatter_df[ip_col].median()
-                use_log_x = median_ip > 0 and pd.notna(max_ip) and pd.notna(median_ip) and max_ip > 10 * median_ip
-
-                # Define Y-axis range (e.g., 0% to 100%)
-                y_range_intensity = [0, 1] # Adjust if needed, e.g., [0, 0.5] for 0-50%
-
-                fig_ip_int = px.scatter(scatter_df, x=ip_col, y='rd_intensity',
-                                        size='ns_size', color='nace2',
-                                        hover_name='company_name', hover_data=hover_data_subset,
-                                        log_x=use_log_x,
-                                        title=f"R&D Intensity (Focus: {y_range_intensity[0]:.0%} to {y_range_intensity[1]:.0%}) vs. IP5 Patents",
-                                        labels={ip_col: f"IP5 Patent Applications {'(log scale)' if use_log_x else ''}",
-                                                'rd_intensity': 'R&D Intensity', 'nace2': 'Sector'})
-
-                fig_ip_int.update_layout(
-                    yaxis_range=y_range_intensity, # Apply the range
-                    yaxis_tickformat='.1%'
-                )
-                st.plotly_chart(fig_ip_int, use_container_width=True)
-                st.caption(f"Y-axis limited to {y_range_intensity[0]:.0%} - {y_range_intensity[1]:.0%} R&D Intensity to focus on the main data cluster. Bubble size = Net Sales.")
-
-            # --- Operating Margin vs IP5 ---
-            with col2:
-                st.markdown("**Operating Margin vs. IP5 Patent Applications**")
-                # Define Y-axis range (e.g., -50% to +50%)
-                y_range_margin = [-0.5, 0.5] # Adjust if needed, e.g., [-0.2, 0.3]
-
-                fig_ip_mar = px.scatter(scatter_df, x=ip_col, y='op_margin',
-                                        size='ns_size', color='nace2',
-                                        hover_name='company_name', hover_data=hover_data_subset,
-                                        log_x=use_log_x, # Use same log scale condition
-                                        title=f"Operating Margin (Focus: {y_range_margin[0]:.0%} to {y_range_margin[1]:.0%}) vs. IP5 Patents",
-                                        labels={ip_col: f"IP5 Patent Applications {'(log scale)' if use_log_x else ''}",
-                                                'op_margin': 'Operating Margin', 'nace2': 'Sector'})
-
-                fig_ip_mar.update_layout(
-                    yaxis_range=y_range_margin, # Apply the range
-                    yaxis_tickformat='.1%'
-                )
-                st.plotly_chart(fig_ip_mar, use_container_width=True)
-                st.caption(f"Y-axis limited to {y_range_margin[0]:.0%} - {y_range_margin[1]:.0%} Operating Margin to focus on the main data cluster. Bubble size = Net Sales.")
-        else:
-            st.info("Insufficient valid data for IP vs. Financial scatter plots after filtering.")
+render_ip_vs_financials_tab(tab_ip, df, sel_year)
 
 # --- Tab 4: Growth Analysis ---
 with tab_growth:
